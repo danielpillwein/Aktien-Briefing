@@ -9,6 +9,19 @@ import os
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+
+def strip_markdown_from_summary(text: str) -> str:
+    """Entfernt Fettschrift-Markdown (**) nur aus KI-Zusammenfassungstexten."""
+    if not text:
+        return text
+    # Entfernt ** ... **, lässt andere Markdown-Zeichen intakt
+    cleaned = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+    # Überflüssige Leerzeilen normalisieren
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+
 def summarize_portfolio_news(news_summaries: list[str]) -> str:
     """
     Erstellt eine Gesamtzusammenfassung des Portfolios auf Basis der Artikel-Zusammenfassungen.
@@ -87,7 +100,11 @@ def parse_market_overview(text: str):
     emoji = emoji_match.group(1) if emoji_match else "🟡"
 
     return {
-        "macro": macro,
-        "portfolio": portfolio,
-        "final": {"text": final_text, "emoji": emoji},
+        "macro": strip_markdown_from_summary(macro),
+        "portfolio": strip_markdown_from_summary(portfolio),
+        "final": {
+            "text": strip_markdown_from_summary(final_text),
+            "emoji": emoji,
+        },
     }
+

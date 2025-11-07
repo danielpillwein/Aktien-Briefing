@@ -5,13 +5,20 @@ Basisdaten:
 - Aktienkursänderungen: {kursdaten}
 - Nachrichten-Zusammenfassungen: {summaries}
 
-Strukturiere deine Antwort exakt so:
+WICHTIG:
+- Schreibe die Antwort ausschließlich im Fließtext, keine Absätze oder Sätze in Fettschrift.
+- Nur die Abschnittsüberschriften ("Makro:", "Portfolio:", "Gesamteinschätzung:") sollen fett sein.
+- Kein Markdown um normale Textabsätze.
+- Keine Sterne (**), Unterstriche (_) oder sonstige Hervorhebungen im Fließtext.
+- Keine Aufzählungspunkte.
 
-Makro:
-(Beschreibe die aktuelle allgemeine Marktlage und Trends.)
+Antworte exakt in dieser Struktur:
 
-Portfolio:
-(Bewerte das Portfolio basierend auf den Kursänderungen und Nachrichten.)
+**Makro:**
+(3–5 Sätze über die allgemeine Marktlage und Trends.)
 
-Gesamteinschätzung:
-(Eine klare Bewertung mit Richtung – Positiv, Neutral oder Negativ – und falls möglich mit einem Emoji 🟢🟡🔴.)
+**Portfolio:**
+(3–5 Sätze über die Entwicklung und Einschätzung des Portfolios.)
+
+**Gesamteinschätzung:**
+(Eine kurze Bewertung mit Richtung – Positiv, Neutral oder Negativ – und falls möglich mit einem Emoji 🟢🟡🔴.)
