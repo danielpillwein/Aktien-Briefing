@@ -1,5 +1,7 @@
 import argparse
 from core.briefing_agent import run_briefing_test
+from dotenv import load_dotenv
+load_dotenv()
 
 
 def main():
