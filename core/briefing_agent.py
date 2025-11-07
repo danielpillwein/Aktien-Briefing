@@ -4,7 +4,7 @@ from pathlib import Path
 from utils.logger import get_logger
 from .fetch_prices import get_price_changes
 from .fetch_news import get_all_news
-from .market_overview import summarize_portfolio_news
+from .market_overview import summarize_portfolio_news, generate_market_overview
 from .async_ai import async_summarize, async_sentiment
 from .report_builder import render_report
 
@@ -94,15 +94,17 @@ def run_briefing_test():
             print(f"  Einschätzung: {a['emoji']} {a['sentiment']}")
             print(f"  🔗 [Artikel öffnen]({a['link']})\n")
 
-    # === Portfolio-Gesamtzusammenfassung ===
-    logger.info("Erstelle Gesamtzusammenfassung...")
-    overall_summary = summarize_portfolio_news(summaries)
+    # === Marktüberblick mit GPT-Analyse ===
+    logger.info("Erstelle Marktanalyse (Makro/Portfolio/Gesamteinschätzung)...")
+    overview = generate_market_overview(portfolio_data, summaries)
 
-    print("\n---\n")
-    print("🔍 **Gesamtzusammenfassung:**")
-    print(overall_summary)
+    print("\n🧭 **KI-Marktanalyse:**")
+    print(f"📊 Marktlage: {overview['macro']}\n")
+    print(f"💡 Portfolioausblick: {overview['portfolio']}\n")
+    print(f"**Gesamteinschätzung:** {overview['final']['emoji']} {overview['final']['text']}")
 
-    # === Kursdaten formatieren ===
+
+# === Kursdaten formatieren ===
     def format_stock(s):
         if s.change_percent > 0.3:
             emoji = "🟢"
@@ -151,11 +153,7 @@ def run_briefing_test():
                 for sym, articles in watchlist_results.items()
             },
         },
-        "overview": {
-            "macro": "Automatisch generierte Zusammenfassung des Portfolios.",
-            "portfolio": "Die Marktanalyse basiert auf KI-Ergebnissen aus den Artikeln.",
-            "final": {"text": overall_summary, "emoji": "🧠"},
-        },
+        "overview": overview,
     }
 
     render_report(data_for_report)

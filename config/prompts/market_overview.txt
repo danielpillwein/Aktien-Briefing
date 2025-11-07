@@ -1,0 +1,17 @@
+Erstelle eine verständliche, wirtschaftlich formulierte Marktanalyse auf Deutsch.
+Verwende 3–5 Sätze pro Abschnitt.
+
+Basisdaten:
+- Aktienkursänderungen: {kursdaten}
+- Nachrichten-Zusammenfassungen: {summaries}
+
+Strukturiere deine Antwort exakt so:
+
+Makro:
+(Beschreibe die aktuelle allgemeine Marktlage und Trends.)
+
+Portfolio:
+(Bewerte das Portfolio basierend auf den Kursänderungen und Nachrichten.)
+
+Gesamteinschätzung:
+(Eine klare Bewertung mit Richtung – Positiv, Neutral oder Negativ – und falls möglich mit einem Emoji 🟢🟡🔴.)
