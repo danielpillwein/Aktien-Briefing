@@ -1,0 +1,12 @@
+portfolio:
+  - AAPL
+  - MSFT
+  - TSLA
+
+watchlist:
+  - NVDA
+  - AMD
+  - GOOG
+
+scheduler:
+  time: "07:30"
