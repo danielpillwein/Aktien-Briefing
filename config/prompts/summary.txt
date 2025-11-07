@@ -1,4 +1,4 @@
-Fasse den folgenden Nachrichtenartikel in 2–3 prägnanten Sätzen zusammen.
+Fasse den folgenden Nachrichtenartikel in 1-2 prägnanten Sätzen zusammen.
 Ziel: kurze, sachliche, wirtschaftlich relevante Zusammenfassung.
 Artikel:
 {article_text}

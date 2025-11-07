@@ -1,17 +1,19 @@
 import asyncio
+import yaml
+from pathlib import Path
+from utils.logger import get_logger
 from .fetch_prices import get_price_changes
 from .fetch_news import get_all_news
 from .market_overview import summarize_portfolio_news
-from utils.logger import get_logger
 from .async_ai import async_summarize, async_sentiment
-import yaml
-from pathlib import Path
+from .report_builder import render_report
 
 logger = get_logger("BriefingAgent")
 
 
+# === Async-Helferfunktionen ===
 async def process_article(symbol: str, article, semaphore: asyncio.Semaphore):
-    """Hilfsfunktion: fasst Artikel zusammen + bestimmt Sentiment."""
+    """Fasst Artikel zusammen + bestimmt Sentiment asynchron."""
     summary = await async_summarize(article.title, semaphore)
     sentiment = await async_sentiment(summary, semaphore)
     emoji = {"Positiv": "🟢", "Neutral": "🟡", "Negativ": "🔴"}[sentiment]
@@ -25,20 +27,19 @@ async def process_article(symbol: str, article, semaphore: asyncio.Semaphore):
 
 
 async def process_articles_async(news_portfolio, news_watchlist):
-    """Verarbeitet alle Artikel (Portfolio + Watchlist) im selben Loop."""
+    """Verarbeitet alle Artikel (Portfolio + Watchlist) asynchron im selben Loop."""
     semaphore = asyncio.Semaphore(5)
     tasks = []
 
-    # Portfolio & Watchlist zusammen
+    # Kombinierte Verarbeitung
     for sym, articles in {**news_portfolio, **news_watchlist}.items():
-        for a in articles[:2]:
+        for a in articles[:2]:  # begrenze auf 2 Artikel pro Aktie
             tasks.append(process_article(sym, a, semaphore))
 
     results = await asyncio.gather(*tasks)
     output_portfolio, output_watchlist = {}, {}
 
     for sym, data in results:
-        # Zuordnung in Portfolio oder Watchlist
         if sym in news_portfolio:
             output_portfolio.setdefault(sym, []).append(data)
         else:
@@ -47,8 +48,9 @@ async def process_articles_async(news_portfolio, news_watchlist):
     return output_portfolio, output_watchlist
 
 
+# === Hauptfunktion ===
 def run_briefing_test():
-    """Asynchrone KI-News-Analyse im Testmodus."""
+    """Führt gesamten Agenten im Testmodus aus: Kurse, News, KI, Report."""
     with open(Path("config/settings.yaml"), "r", encoding="utf-8") as f:
         settings = yaml.safe_load(f)
 
@@ -58,8 +60,10 @@ def run_briefing_test():
     logger.info("Hole Kursdaten...")
     portfolio_data, last_date = get_price_changes(portfolio)
     watchlist_data, _ = get_price_changes(watchlist)
+
     print(f"\n📅 Letzter Handelstag: {last_date}\n")
 
+    # === News abrufen ===
     logger.info("Rufe aktuelle Nachrichten ab...")
     news_portfolio = get_all_news(portfolio)
     news_watchlist = get_all_news(watchlist)
@@ -70,9 +74,9 @@ def run_briefing_test():
         process_articles_async(news_portfolio, news_watchlist)
     )
 
-    # === Ausgabe ===
+    # === Ausgabe Portfolio ===
     print("\n## 📊 Portfolio")
-    summaries = []
+    summaries = []  # <-- hier initialisieren
     for sym, articles in portfolio_results.items():
         print(f"\n### {sym}")
         for a in articles:
@@ -81,6 +85,7 @@ def run_briefing_test():
             print(f"  🔗 [Artikel öffnen]({a['link']})\n")
             summaries.append(a["summary"])
 
+    # === Ausgabe Watchlist ===
     print("\n## 👁️ Watchlist")
     for sym, articles in watchlist_results.items():
         print(f"\n### {sym}")
@@ -89,7 +94,7 @@ def run_briefing_test():
             print(f"  Einschätzung: {a['emoji']} {a['sentiment']}")
             print(f"  🔗 [Artikel öffnen]({a['link']})\n")
 
-    # === Gesamtzusammenfassung ===
+    # === Portfolio-Gesamtzusammenfassung ===
     logger.info("Erstelle Gesamtzusammenfassung...")
     overall_summary = summarize_portfolio_news(summaries)
 
@@ -97,10 +102,63 @@ def run_briefing_test():
     print("🔍 **Gesamtzusammenfassung:**")
     print(overall_summary)
 
-    return {
-        "portfolio": portfolio_data,
-        "watchlist": watchlist_data,
-        "news": {"portfolio": portfolio_results, "watchlist": watchlist_results},
-        "summary": overall_summary,
-        "last_trading_day": last_date,
+    # === Kursdaten formatieren ===
+    def format_stock(s):
+        if s.change_percent > 0.3:
+            emoji = "🟢"
+        elif s.change_percent < -0.3:
+            emoji = "🔴"
+        else:
+            emoji = "🟡"
+        sentiment = (
+            "Positiv" if emoji == "🟢" else "Negativ" if emoji == "🔴" else "Neutral"
+        )
+        return {
+            "symbol": s.symbol,
+            "change": f"{s.change_percent:+.2f}%",
+            "sentiment": sentiment,
+            "emoji": emoji,
+        }
+
+    # === Report-Datenstruktur für Markdown ===
+    data_for_report = {
+        "portfolio": [format_stock(s) for s in portfolio_data],
+        "watchlist": [format_stock(s) for s in watchlist_data],
+        "news": {
+            # Einschätzung und Link jeweils eigene Zeile
+            "portfolio": {
+                sym: [
+                    {
+                        "summary": a["summary"],
+                        "sentiment": a["sentiment"],
+                        "emoji": a["emoji"],
+                        "link": a["link"],
+                    }
+                    for a in articles
+                ]
+                for sym, articles in portfolio_results.items()
+            },
+            "watchlist": {
+                sym: [
+                    {
+                        "summary": a["summary"],
+                        "sentiment": a["sentiment"],
+                        "emoji": a["emoji"],
+                        "link": a["link"],
+                    }
+                    for a in articles
+                ]
+                for sym, articles in watchlist_results.items()
+            },
+        },
+        "overview": {
+            "macro": "Automatisch generierte Zusammenfassung des Portfolios.",
+            "portfolio": "Die Marktanalyse basiert auf KI-Ergebnissen aus den Artikeln.",
+            "final": {"text": overall_summary, "emoji": "🧠"},
+        },
     }
+
+    render_report(data_for_report)
+
+    logger.info("✅ Testmodus abgeschlossen.")
+    return data_for_report

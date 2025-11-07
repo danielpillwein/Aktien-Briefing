@@ -1,0 +1,58 @@
+## 📩 **Tägliches Aktienbriefing – {{ date }}**
+
+---
+
+### 💼 **Portfolio-Überblick**
+| Aktie | Tagesänderung | Einschätzung |
+|--------|----------------|---------------|
+{%- for stock in portfolio %}
+| **{{ stock.symbol }}** | {{ stock.change }} | {{ stock.emoji }} {{ stock.sentiment }} |
+{%- endfor %}
+
+---
+
+### 👁️ **Watchlist**
+| Aktie | Tagesänderung | Einschätzung |
+|--------|----------------|---------------|
+{%- for stock in watchlist %}
+| **{{ stock.symbol }}** | {{ stock.change }} | {{ stock.emoji }} {{ stock.sentiment }} |
+{%- endfor %}
+
+---
+
+### 📰 **News – Portfolio**
+{%- for sym, articles in news.portfolio.items() %}
+#### {{ sym }}
+{%- for a in articles %}
+- {{ a.summary }}
+
+  **Einschätzung:** {{ a.emoji }} {{ a.sentiment }} | 🔗 [Artikel öffnen]({{ a.link }})
+{%- endfor %}
+{%- endfor %}
+
+---
+
+### 👁️ **News – Watchlist**
+{%- for sym, articles in news.watchlist.items() %}
+#### {{ sym }}
+{%- for a in articles %}
+- {{ a.summary }}
+  **Einschätzung:** {{ a.emoji }} {{ a.sentiment }}
+  🔗 [Artikel öffnen]({{ a.link }})
+{%- endfor %}
+{%- endfor %}
+
+---
+
+### 🧭 **Gesamtübersicht**
+📊 **Marktlage:**
+
+{{ overview.macro }}
+
+💡 **Portfolio-Ausblick:**
+
+{{ overview.portfolio }}
+
+**Gesamteinschätzung:**
+
+{{ overview.final.emoji }} *{{ overview.final.text }}*
