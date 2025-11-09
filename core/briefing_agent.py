@@ -8,6 +8,7 @@ from .market_overview import summarize_portfolio_news, generate_market_overview
 from .async_ai import async_summarize, async_sentiment
 from .report_builder import render_report
 from utils.notifications import send_briefing_blocks
+from utils.archive_manager import archive_report
 
 logger = get_logger("BriefingAgent")
 
@@ -152,6 +153,11 @@ def run_briefing_test(send_telegram: bool = True):
         logger.info("📨 Sende Telegram-Blöcke (Testmodus)...")
         from utils.notifications import send_briefing_blocks
         send_briefing_blocks(data_for_report)
+
+
+    logger.info("📦 Archiviere Report...")
+    archive_report()
+
 
     logger.info("✅ Briefing abgeschlossen.")
     return data_for_report

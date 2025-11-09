@@ -1,12 +1,15 @@
 portfolio:
-  - AAPL
+  - GOOGL
+  - PLTR
+  - NVDA
+  - ENR
   - MSFT
-  - TSLA
+  - TSM
+  - AVGO
+  - HNR1
 
 watchlist:
-  - NVDA
-  - AMD
-  - GOOG
+  - V
 
 scheduler:
   time: "07:00"
@@ -17,4 +20,10 @@ performance:
   retries: 3
   max_concurrent_tasks: 5
   debug: false
+
+archive:
+  enabled: true
+  compress_old: true        # ältere Reports zippen
+  delete_after_days: 31    # nach 6 Monaten löschen
+
 
