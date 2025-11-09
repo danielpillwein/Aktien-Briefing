@@ -12,3 +12,9 @@ scheduler:
   time: "07:00"
   timezone: "Europe/Vienna"
 
+performance:
+  cache_enabled: true
+  retries: 3
+  max_concurrent_tasks: 5
+  debug: false
+

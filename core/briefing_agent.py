@@ -46,6 +46,12 @@ def run_briefing_test(send_telegram: bool = True):
     """Führt gesamten Agenten im Testmodus aus: Kurse, News, KI, Report, Telegram (optional)."""
     with open(Path("config/settings.yaml"), "r", encoding="utf-8") as f:
         settings = yaml.safe_load(f)
+    DEBUG_MODE = settings.get("performance", {}).get("debug", False)
+    if DEBUG_MODE:
+        logger.info("⚙️ Debug-Modus aktiviert (detaillierte Logs).")
+
+    with open(Path("config/settings.yaml"), "r", encoding="utf-8") as f:
+        settings = yaml.safe_load(f)
     portfolio = settings["portfolio"]
     watchlist = settings["watchlist"]
 

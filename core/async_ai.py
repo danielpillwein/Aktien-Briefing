@@ -1,54 +1,81 @@
 import asyncio
-import os
-from loguru import logger
+import random
 from openai import AsyncOpenAI
-from dotenv import load_dotenv
-from utils.prompt_loader import load_prompt
+from loguru import logger
+from utils.cache import load_cache, save_cache, get_cached_result, set_cached_result
+import yaml
+from pathlib import Path
 
-load_dotenv()
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = AsyncOpenAI()
+with open(Path("config/settings.yaml"), "r", encoding="utf-8") as f:
+    settings = yaml.safe_load(f)
+perf = settings.get("performance", {})
+CACHE_ENABLED = perf.get("cache_enabled", True)
+RETRIES = perf.get("retries", 3)
+MAX_TASKS = perf.get("max_concurrent_tasks", 5)
+
+cache = load_cache()
 
 
-async def async_summarize(article_text: str, semaphore: asyncio.Semaphore) -> str:
-    """Erstellt asynchron eine kurze 3-4-Satz-Zusammenfassung."""
-    try:
-        prompt = load_prompt("summary").format(article_text=article_text.strip())
-        async with semaphore:
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a financial news summarizer."},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.4,
-                max_tokens=150,
-            )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        logger.error(f"Fehler bei async_summarize: {e}")
+async def async_summarize(title: str, semaphore: asyncio.Semaphore):
+    """Fasst Artikel mit GPT asynchron zusammen (mit Cache & Retry)."""
+    cache_key = f"summary::{title.strip().lower()}"
+    if CACHE_ENABLED and (cached := get_cached_result(cache, cache_key)):
+        logger.debug(f"Cache hit für {title}")
+        return cached
+
+    async with semaphore:
+        for attempt in range(RETRIES):
+            try:
+                logger.debug(f"Summarizing ({attempt+1}/{RETRIES}): {title}")
+                resp = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "Fasse Finanzartikel prägnant zusammen (3–4 Sätze)."},
+                        {"role": "user", "content": title},
+                    ],
+                    max_tokens=150,
+                    temperature=0.5,
+                )
+                summary = resp.choices[0].message.content.strip()
+                if CACHE_ENABLED:
+                    set_cached_result(cache, cache_key, summary)
+                    save_cache(cache)
+                return summary
+            except Exception as e:
+                logger.warning(f"Fehler bei async_summarize ({attempt+1}/{RETRIES}): {e}")
+                await asyncio.sleep(1.5 * (attempt + 1))
         return "(Fehler bei Zusammenfassung)"
 
 
-async def async_sentiment(summary: str, semaphore: asyncio.Semaphore) -> str:
-    """Analysiert Stimmung (Positiv / Neutral / Negativ) asynchron."""
-    try:
-        prompt = load_prompt("sentiment").format(summary=summary)
-        async with semaphore:
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a financial sentiment analyzer."},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0,
-                max_tokens=10,
-            )
-        result = response.choices[0].message.content.strip().lower()
-        if "positiv" in result or "positive" in result:
-            return "Positiv"
-        if "negativ" in result or "negative" in result:
-            return "Negativ"
-        return "Neutral"
-    except Exception as e:
-        logger.error(f"Fehler bei async_sentiment: {e}")
+async def async_sentiment(summary: str, semaphore: asyncio.Semaphore):
+    """Analysiert Stimmung asynchron (mit Cache & Retry)."""
+    cache_key = f"sentiment::{summary.strip().lower()[:150]}"
+    if CACHE_ENABLED and (cached := get_cached_result(cache, cache_key)):
+        logger.debug("Cache hit für Sentiment.")
+        return cached
+
+    async with semaphore:
+        for attempt in range(RETRIES):
+            try:
+                logger.debug(f"Sentimentanalyse ({attempt+1}/{RETRIES})")
+                resp = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "Bewerte die Stimmung: Positiv, Neutral oder Negativ."},
+                        {"role": "user", "content": summary},
+                    ],
+                    max_tokens=5,
+                    temperature=0,
+                )
+                sentiment = resp.choices[0].message.content.strip().capitalize()
+                if sentiment not in ["Positiv", "Neutral", "Negativ"]:
+                    sentiment = "Neutral"
+                if CACHE_ENABLED:
+                    set_cached_result(cache, cache_key, sentiment)
+                    save_cache(cache)
+                return sentiment
+            except Exception as e:
+                logger.warning(f"Fehler bei async_sentiment ({attempt+1}/{RETRIES}): {e}")
+                await asyncio.sleep(1.5 * (attempt + 1))
         return "Neutral"
