@@ -9,6 +9,6 @@ watchlist:
   - GOOG
 
 scheduler:
-  time: "18:30"
+  time: "07:00"
   timezone: "Europe/Vienna"
 

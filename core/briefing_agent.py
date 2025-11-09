@@ -42,9 +42,8 @@ async def process_articles_async(news_portfolio, news_watchlist):
             out_watchlist.setdefault(sym, []).append(data)
     return out_portfolio, out_watchlist
 
-
-def run_briefing_test():
-    """Führt gesamten Agenten im Testmodus aus: Kurse, News, KI, Report, Telegram."""
+def run_briefing_test(send_telegram: bool = True):
+    """Führt gesamten Agenten im Testmodus aus: Kurse, News, KI, Report, Telegram (optional)."""
     with open(Path("config/settings.yaml"), "r", encoding="utf-8") as f:
         settings = yaml.safe_load(f)
     portfolio = settings["portfolio"]
@@ -142,8 +141,12 @@ def run_briefing_test():
 
     render_report(data_for_report)
 
-    logger.info("📨 Sende Telegram-Blöcke...")
-    send_briefing_blocks(data_for_report)
+    # Nur im Testmodus direkt senden
+    if send_telegram:
+        logger.info("📨 Sende Telegram-Blöcke (Testmodus)...")
+        from utils.notifications import send_briefing_blocks
+        send_briefing_blocks(data_for_report)
 
-    logger.info("✅ Testmodus abgeschlossen.")
+    logger.info("✅ Briefing abgeschlossen.")
     return data_for_report
+
