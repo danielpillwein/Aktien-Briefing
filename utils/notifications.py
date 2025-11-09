@@ -3,7 +3,12 @@ import requests
 from dotenv import load_dotenv
 from loguru import logger
 
-load_dotenv()
+# zuerst prüfen, ob die globale .env existiert
+if os.path.exists("/etc/aktienbriefing/.env"):
+    load_dotenv("/etc/aktienbriefing/.env")
+else:
+    load_dotenv()  # Fallback für lokale Tests
+
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 

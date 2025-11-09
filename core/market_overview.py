@@ -6,7 +6,12 @@ from utils.prompt_loader import load_prompt
 import re
 import os
 
-load_dotenv()
+# zuerst prüfen, ob die globale .env existiert
+if os.path.exists("/etc/aktienbriefing/.env"):
+    load_dotenv("/etc/aktienbriefing/.env")
+else:
+    load_dotenv()  # Fallback für lokale Tests
+
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
