@@ -1,0 +1,27 @@
+name: 🚀 Deploy to Hetzner
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: aktienbot
+          key: ${{ secrets.DEPLOY_KEY }}
+          script: |
+            cd /opt/aktienbriefing
+            git pull
+            sudo systemctl restart aktienbriefing
+            echo "✅ Deployment erfolgreich auf Hetzner"
