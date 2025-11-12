@@ -22,6 +22,7 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           script: |
             cd /opt/aktienbriefing
+            git reset --hard HEAD
             git pull
             sudo systemctl restart aktienbriefing
             echo "✅ Deployment erfolgreich auf Hetzner"
