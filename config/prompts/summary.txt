@@ -1,6 +1,7 @@
-Sprache der Antwort: {language}
+TLDR: Erstelle eine extrem prägnante, wirtschaftlich relevante Zusammenfassung.
+WICHTIG:
+- Fasse nur die wichtigsten Informationen für Anleger zusammen.
+- Antwortsprache: {language}
 
-Fasse den folgenden Nachrichtenartikel in 1-2 prägnanten Sätzen zusammen.
-Ziel: kurze, sachliche, wirtschaftlich relevante Zusammenfassung.
 Artikel:
 {article_text}

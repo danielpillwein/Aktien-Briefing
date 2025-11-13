@@ -1,26 +1,23 @@
-Sprache der Antwort: {language}
-
-Erstelle eine verständliche, wirtschaftlich formulierte Marktanalyse auf Deutsch.
-Verwende 3–5 Sätze pro Abschnitt.
+Erstelle eine klare, wirtschaftlich formulierte Marktanalyse in {language}.
+Die Analyse soll die wichtigsten Entwicklungen kompakt und verständlich darstellen.
+Fokussiere dich auf relevante Kursbewegungen und Nachrichten, ohne unnötige Details.
 
 Basisdaten:
-- Aktienkursänderungen: {kursdaten}
-- Nachrichten-Zusammenfassungen: {summaries}
+- Kursdaten: {kursdaten}
+- Nachrichten: {summaries}
 
 WICHTIG:
-- Schreibe die Antwort ausschließlich im Fließtext, keine Absätze oder Sätze in Fettschrift.
-- Nur die Abschnittsüberschriften ("Makro:", "Portfolio:", "Gesamteinschätzung:") sollen fett sein.
-- Kein Markdown um normale Textabsätze.
-- Keine Sterne (**), Unterstriche (_) oder sonstige Hervorhebungen im Fließtext.
-- Keine Aufzählungspunkte.
+- Schreibe ausschließlich im Fließtext.
+- Keine Listen, keine Fettschrift außer den Abschnittsüberschriften.
+- Keine Aufzählungen oder Sonderformatierungen.
 
-Antworte exakt in dieser Struktur:
+Antwortstruktur:
 
 **Makro:**
-(3–5 Sätze über die allgemeine Marktlage und Trends.)
+(3–5 Sätze über die allgemeine Marktentwicklung, Trends, Risiken oder Chancen.)
 
 **Portfolio:**
-(3–5 Sätze über die Entwicklung und Einschätzung des Portfolios.)
+(3–5 Sätze über die wichtigsten Kursbewegungen, Entwicklungen oder Stimmungsimpulse.)
 
 **Gesamteinschätzung:**
-(Eine kurze Bewertung mit Richtung – Positiv, Neutral oder Negativ – und falls möglich mit einem Emoji 🟢🟡🔴.)
+(Ein prägnanter Satz mit einer klaren Richtung – Positiv, Neutral oder Negativ – und einem passenden Emoji.)

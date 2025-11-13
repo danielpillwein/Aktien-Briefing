@@ -1,10 +1,11 @@
-Sprache der Antwort: {language}
-
-Analysiere den folgenden Text hinsichtlich seiner Auswirkung auf den Aktienkurs.
-Kategorisiere ausschließlich als:
+Analysiere präzise, wie der folgende Text den Aktienkurs beeinflusst.
+Stil: direkt, klar, für Anleger leicht verständlich.
+Gib ausschließlich eine der folgenden Kategorien aus:
 - Positiv
 - Neutral
 - Negativ
+
+Antwortsprache: {language}
 
 Text:
 {summary}
