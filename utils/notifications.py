@@ -73,10 +73,10 @@ def send_briefing_blocks(data: dict):
         msg1 = "<b>📊 Tägliches Aktienbriefing</b>\n\n"
         msg1 += "<b>💼 Portfolio:</b>\n"
         for s in data["portfolio"]:
-            msg1 += f"{s['symbol']}: {s['change']} {s['emoji']} {s['sentiment']}\n"
+            msg1 += f"{s['symbol']}: {s['change']} {s['emoji']}\n"
         msg1 += "\n<b>👁️ Watchlist:</b>\n"
         for s in data["watchlist"]:
-            msg1 += f"{s['symbol']}: {s['change']} {s['emoji']} {s['sentiment']}\n"
+            msg1 += f"{s['symbol']}: {s['change']} {s['emoji']}\n"
 
         send_telegram_message(msg1, html=True)
 

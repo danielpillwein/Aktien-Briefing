@@ -1,6 +1,10 @@
-TLDR: Erstelle eine extrem prägnante, wirtschaftlich relevante Zusammenfassung.
+TLDR: Fasse den folgenden Nachrichtenartikel in EINEM prägnanten Satz zusammen.
+Ziel: kurze, sachliche, wirtschaftlich relevante Zusammenfassung.
+
 WICHTIG:
-- Fasse nur die wichtigsten Informationen für Anleger zusammen.
+- Verwende NIEMALS Börsenticker oder Wertpapierkürzel (z. B. MSFT, GOOG, GOOGL, PLTR, TSM, AVGO).
+- Nutze ausschließlich ausgeschriebene Unternehmensnamen.
+- Keine Formatierungen, kein Markdown, keine Listen.
 - Antwortsprache: {language}
 
 Artikel:

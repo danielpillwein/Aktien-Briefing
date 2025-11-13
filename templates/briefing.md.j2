@@ -6,7 +6,7 @@
 | Aktie | Tagesänderung | Einschätzung |
 |--------|----------------|---------------|
 {%- for stock in portfolio %}
-| **{{ stock.symbol }}** | {{ stock.change }} | {{ stock.emoji }} {{ stock.sentiment }} |
+| **{{ stock.symbol }}** | {{ stock.change }} | {{ stock.emoji }} |
 {%- endfor %}
 
 ---
@@ -15,14 +15,14 @@
 | Aktie | Tagesänderung | Einschätzung |
 |--------|----------------|---------------|
 {%- for stock in watchlist %}
-| **{{ stock.symbol }}** | {{ stock.change }} | {{ stock.emoji }} {{ stock.sentiment }} |
+| **{{ stock.symbol }}** | {{ stock.change }} | {{ stock.emoji }} |
 {%- endfor %}
 
 ---
 
 ### 📰 **News – Portfolio**
-{%- for sym, articles in news.portfolio.items() %}
-#### {{ sym }}
+{%- for name, articles in news.portfolio.items() %}
+#### {{ name }}
 {%- for a in articles %}
 - {{ a.summary }}
 
@@ -33,8 +33,8 @@
 ---
 
 ### 👁️ **News – Watchlist**
-{%- for sym, articles in news.watchlist.items() %}
-#### {{ sym }}
+{%- for name, articles in news.watchlist.items() %}
+#### {{ name }}
 {%- for a in articles %}
 - {{ a.summary }}
   **Einschätzung:** {{ a.emoji }} {{ a.sentiment }}

@@ -10,14 +10,17 @@ WICHTIG:
 - Schreibe ausschließlich im Fließtext.
 - Keine Listen, keine Fettschrift außer den Abschnittsüberschriften.
 - Keine Aufzählungen oder Sonderformatierungen.
+- Verwende NIEMALS Tickersymbole oder Wertpapierkürzel (z. B. MSFT, GOOG, GOOGL, PLTR, TSM, AVGO).
+- Schreibe ausschließlich ausgeschriebene Unternehmensnamen.
+- Klar, prägnant, wirtschaftlich sinnvoll.
 
 Antwortstruktur:
 
 **Makro:**
-(3–5 Sätze über die allgemeine Marktentwicklung, Trends, Risiken oder Chancen.)
+(Ein prägnanter Satz über die allgemeine Marktentwicklung, Trends, Risiken oder Chancen.)
 
 **Portfolio:**
-(3–5 Sätze über die wichtigsten Kursbewegungen, Entwicklungen oder Stimmungsimpulse.)
+(Ein prägnanter Satz über die wichtigsten Kursbewegungen, Entwicklungen oder Stimmungsimpulse.)
 
 **Gesamteinschätzung:**
 (Ein prägnanter Satz mit einer klaren Richtung – Positiv, Neutral oder Negativ – und einem passenden Emoji.)

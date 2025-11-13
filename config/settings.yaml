@@ -1,4 +1,4 @@
-language: "en"
+language: "de"
 
 portfolio:
   - ticker: "GOOG"
@@ -6,14 +6,14 @@ portfolio:
   - ticker: "PLTR"
     name: "Palantir Technologies Inc."
   - ticker: "MSFT"
-    name: "Microsoft Corporation"
+    name: "Microsoft"
   - ticker: "ENR"
     name: "Siemens Energy AG"
   - ticker: "TSM"
-    name: "Taiwan Semiconductor Manufacturing Co. Ltd."
+    name: "TSM Co. Ltd."
   - ticker: "AVGO"
     name: "Broadcom Inc."
-  - ticker: "HNR1"
+  - ticker: "HVRRF"
     name: "Hannover Rück SE"
 
 watchlist:

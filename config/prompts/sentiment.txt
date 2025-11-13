@@ -1,11 +1,11 @@
-Analysiere präzise, wie der folgende Text den Aktienkurs beeinflusst.
-Stil: direkt, klar, für Anleger leicht verständlich.
-Gib ausschließlich eine der folgenden Kategorien aus:
-- Positiv
-- Neutral
-- Negativ
+Analysiere die folgende Zusammenfassung und bestimme das Marktsentiment.
+Ergebnis muss eines der drei Wörter sein: Positiv, Neutral oder Negativ.
 
+WICHTIG:
+- Verwende in deiner Analyse und Einschätzung NIEMALS Börsenticker oder Wertpapierkürzel (z. B. MSFT, GOOG, PLTR, TSM, AVGO).
+- Nutze ausschließlich ausgeschriebene Unternehmensnamen.
+- Schreibe klar, einfach und prägnant.
 Antwortsprache: {language}
 
 Text:
-{summary}
+{summary_text}

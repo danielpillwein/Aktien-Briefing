@@ -29,7 +29,7 @@ async def process_article(ticker: str, article, semaphore: asyncio.Semaphore):
 
 
 async def process_articles_async(news_portfolio, news_watchlist):
-    """Verarbeitet alle Artikel (Portfolio + Watchlist) asynchron."""
+    """Verarbeitet alle Artikel (Portfolio + Watchlist) asynchron im selben Loop."""
     semaphore = asyncio.Semaphore(5)
     tasks = []
 
@@ -52,7 +52,7 @@ async def process_articles_async(news_portfolio, news_watchlist):
 
 
 def run_briefing_test(send_telegram: bool = True):
-    """Führt gesamten Agenten im Testmodus aus."""
+    """Führt gesamten Agenten im Testmodus aus: Kurse, News, KI, Report, Telegram."""
     with open(Path("config/settings.yaml"), "r", encoding="utf-8") as f:
         settings = yaml.safe_load(f)
 
@@ -65,14 +65,34 @@ def run_briefing_test(send_telegram: bool = True):
 
     print(f"\n📅 Letzter Handelstag: {last_date}\n")
 
-    logger.info("Rufe aktuelle Nachrichten (RSS-only) ab.")
-    news_portfolio = get_all_news(portfolio_items)
-    news_watchlist = get_all_news(watchlist_items)
+    logger.info("Rufe aktuelle Nachrichten ab.")
+    news_portfolio_raw = get_all_news(portfolio_items)
+    news_watchlist_raw = get_all_news(watchlist_items)
 
     logger.info("Starte parallele KI-Analyse.")
-    portfolio_results, watchlist_results = asyncio.run(
-        process_articles_async(news_portfolio, news_watchlist)
+    portfolio_results_raw, watchlist_results_raw = asyncio.run(
+        process_articles_async(news_portfolio_raw, news_watchlist_raw)
     )
+
+    # ---------------------------------------------------------
+    #  STAGE-4: Ticker-Keys → Name-Keys für Report & Telegram
+    # ---------------------------------------------------------
+
+    name_map_portfolio = {item["ticker"]: item["name"] for item in portfolio_items}
+    name_map_watchlist = {item["ticker"]: item["name"] for item in watchlist_items}
+
+    # Convert news dicts to NAME-keys
+    news_portfolio = {
+        name_map_portfolio[ticker]: articles
+        for ticker, articles in portfolio_results_raw.items()
+    }
+
+    news_watchlist = {
+        name_map_watchlist[ticker]: articles
+        for ticker, articles in watchlist_results_raw.items()
+    }
+
+    # ---------------------------------------------------------
 
     print("\n## 📊 Portfolio")
     summaries = []
@@ -80,7 +100,7 @@ def run_briefing_test(send_telegram: bool = True):
     for item in portfolio_items:
         name = item["name"]
         ticker = item["ticker"]
-        arts = portfolio_results.get(ticker, [])
+        arts = portfolio_results_raw.get(ticker, [])
 
         print(f"\n### {name}")
         for a in arts:
@@ -93,7 +113,7 @@ def run_briefing_test(send_telegram: bool = True):
     for item in watchlist_items:
         name = item["name"]
         ticker = item["ticker"]
-        arts = watchlist_results.get(ticker, [])
+        arts = watchlist_results_raw.get(ticker, [])
 
         print(f"\n### {name}")
         for a in arts:
@@ -118,48 +138,25 @@ def run_briefing_test(send_telegram: bool = True):
         else:
             emoji = "🟡"
 
-        sentiment = (
-            "Positiv" if emoji == "🟢" else "Negativ" if emoji == "🔴" else "Neutral"
-        )
-
         return {
-            "symbol": s.symbol,
+            "symbol": s.symbol,       # Name-only (Stage-4)
             "change": f"{s.change_percent:+.2f}%",
-            "sentiment": sentiment,
             "emoji": emoji,
         }
 
+    # ---------------------------------------------------------
+    # STAGE-4: Report-Daten NUR mit Name-Keys
+    # ---------------------------------------------------------
     data_for_report = {
         "portfolio": [format_stock(s) for s in portfolio_data],
         "watchlist": [format_stock(s) for s in watchlist_data],
         "news": {
-            "portfolio": {
-                item["ticker"]: [
-                    {
-                        "summary": a["summary"],
-                        "sentiment": a["sentiment"],
-                        "emoji": a["emoji"],
-                        "link": a["link"],
-                    }
-                    for a in portfolio_results.get(item["ticker"], [])
-                ]
-                for item in portfolio_items
-            },
-            "watchlist": {
-                item["ticker"]: [
-                    {
-                        "summary": a["summary"],
-                        "sentiment": a["sentiment"],
-                        "emoji": a["emoji"],
-                        "link": a["link"],
-                    }
-                    for a in watchlist_results.get(item["ticker"], [])
-                ]
-                for item in watchlist_items
-            },
+            "portfolio": news_portfolio,   # Name-based
+            "watchlist": news_watchlist,   # Name-based
         },
         "overview": overview,
     }
+    # ---------------------------------------------------------
 
     render_report(data_for_report)
 
