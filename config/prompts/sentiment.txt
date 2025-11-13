@@ -1,3 +1,5 @@
+Sprache der Antwort: {language}
+
 Analysiere den folgenden Text hinsichtlich seiner Auswirkung auf den Aktienkurs.
 Kategorisiere ausschließlich als:
 - Positiv

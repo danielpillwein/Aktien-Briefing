@@ -1,3 +1,5 @@
+Sprache der Antwort: {language}
+
 Fasse den folgenden Nachrichtenartikel in 1-2 prägnanten Sätzen zusammen.
 Ziel: kurze, sachliche, wirtschaftlich relevante Zusammenfassung.
 Artikel:

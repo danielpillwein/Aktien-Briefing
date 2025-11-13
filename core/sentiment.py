@@ -18,7 +18,7 @@ def analyze_sentiment(summary: str) -> str:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a financial sentiment analyzer."},
+                {"role": "system", "content": f"You are a financial sentiment analyzer. Respond only with Positiv, Neutral or Negativ in {settings.get('language', 'de')}."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0,

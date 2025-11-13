@@ -1,3 +1,5 @@
+Sprache der Antwort: {language}
+
 Erstelle eine verständliche, wirtschaftlich formulierte Marktanalyse auf Deutsch.
 Verwende 3–5 Sätze pro Abschnitt.
 

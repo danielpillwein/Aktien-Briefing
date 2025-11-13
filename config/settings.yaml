@@ -1,15 +1,24 @@
+language: "en"
+
 portfolio:
-  - GOOGL
-  - PLTR
-  - NVDA
-  - ENR
-  - MSFT
-  - TSM
-  - AVGO
-  - HVRRF
+  - isin: "US02079K3059"
+    name: "Alphabet Inc."
+  - isin: "US69608A1088"
+    name: "Palantir Technologies Inc."
+  - isin: "US5949181045"
+    name: "Microsoft Corp."
+  - isin: "DE000ENER6Y0"
+    name: "Siemens Energy AG"
+  - isin: "US8740391003"
+    name: "TSM Co. Ltd."
+  - isin: "US11135F1012"
+    name: "Broadcom Inc."
+  - isin: "DE0008402215"
+    name: "Hannover Rück SE"
 
 watchlist:
-  - V
+  - isin: "US92826C8394"
+    name: "Visa Inc."
 
 scheduler:
   time: "07:00"
