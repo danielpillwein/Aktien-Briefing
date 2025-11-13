@@ -1,23 +1,23 @@
 language: "en"
 
 portfolio:
-  - isin: "US02079K3059"
+  - ticker: "GOOG"
     name: "Alphabet Inc."
-  - isin: "US69608A1088"
+  - ticker: "PLTR"
     name: "Palantir Technologies Inc."
-  - isin: "US5949181045"
-    name: "Microsoft Corp."
-  - isin: "DE000ENER6Y0"
+  - ticker: "MSFT"
+    name: "Microsoft Corporation"
+  - ticker: "ENR"
     name: "Siemens Energy AG"
-  - isin: "US8740391003"
-    name: "TSM Co. Ltd."
-  - isin: "US11135F1012"
+  - ticker: "TSM"
+    name: "Taiwan Semiconductor Manufacturing Co. Ltd."
+  - ticker: "AVGO"
     name: "Broadcom Inc."
-  - isin: "DE0008402215"
+  - ticker: "HNR1"
     name: "Hannover Rück SE"
 
 watchlist:
-  - isin: "US92826C8394"
+  - ticker: "V"
     name: "Visa Inc."
 
 scheduler:
