@@ -31,7 +31,7 @@ async def async_summarize(title: str, semaphore: asyncio.Semaphore):
                 resp = await client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
-                        {"role": "system", "content": "Fasse Finanzartikel prägnant zusammen (3–4 Sätze)."},
+                        {"role": "system", "content": f"You are a professional financial summarizer. Use the TLDR style internally but do NOT output 'TLDR:'. Respond only in {settings.get('language', 'de')}."},
                         {"role": "user", "content": title},
                     ],
                     max_tokens=150,
@@ -62,7 +62,7 @@ async def async_sentiment(summary: str, semaphore: asyncio.Semaphore):
                 resp = await client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
-                        {"role": "system", "content": "Bewerte die Stimmung: Positiv, Neutral oder Negativ."},
+                        {"role": "system", "content": f"You are a financial sentiment analyzer. Respond only with Positiv, Neutral or Negativ in {settings.get('language', 'de')}."},
                         {"role": "user", "content": summary},
                     ],
                     max_tokens=5,

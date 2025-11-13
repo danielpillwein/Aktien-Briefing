@@ -1,9 +1,9 @@
 import feedparser
-import yfinance as yf
 from loguru import logger
 from typing import Dict, List
 from pydantic import BaseModel
 import time
+import urllib.parse
 
 
 class NewsItem(BaseModel):
@@ -12,70 +12,75 @@ class NewsItem(BaseModel):
     source: str
 
 
-def fetch_rss_news(symbol: str, max_items: int = 5) -> List[NewsItem]:
-    """Holt Finanznachrichten über Google News RSS als Fallback."""
+def fetch_rss_news(name: str, max_items: int = 5) -> List[NewsItem]:
+    """
+    Holt Nachrichten ausschließlich über RSS:
+    - Google News RSS
+    - Yahoo Finance RSS (nicht über API!)
+
+    Query basiert immer auf dem Firmennamen.
+    """
+    safe_query = urllib.parse.quote_plus(f"{name} stock")
+
     feeds = [
-        f"https://news.google.com/rss/search?q={symbol}+stock",
-        f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US",
+        f"https://news.google.com/rss/search?q={safe_query}",
+        f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={safe_query}&region=US&lang=en-US",
     ]
-    articles = []
+
+    articles: List[NewsItem] = []
 
     for feed_url in feeds:
         try:
             parsed = feedparser.parse(feed_url)
+
+            if not parsed.entries:
+                continue
+
             for entry in parsed.entries[:max_items]:
                 title = entry.get("title")
                 link = entry.get("link")
+
                 if not title or not link:
                     continue
+
                 articles.append(
-                    NewsItem(title=title, link=link, source=feed_url.split("/")[2])
+                    NewsItem(
+                        title=title,
+                        link=link,
+                        source=feed_url.split("/")[2],
+                    )
                 )
+
         except Exception as e:
-            logger.error(f"RSS error for {symbol}: {e}")
-        time.sleep(0.3)
+            logger.error(f"RSS error for '{name}': {e}")
+
+        time.sleep(0.25)
 
     return articles
 
 
-def fetch_yf_news(symbol: str, max_items: int = 5) -> List[NewsItem]:
+def get_all_news(items: List[dict]) -> Dict[str, List[NewsItem]]:
     """
-    Holt Nachrichten über die Yahoo Finance API via yfinance.
-    Falls Datenstruktur fehlerhaft, wird leer zurückgegeben.
+    Holt Nachrichten für mehrere Aktien basierend auf:
+    ticker = interner Key
+    name   = RSS-Suchbegriff
+    Rückgabe: {ticker: [NewsItem, ...]}
     """
-    try:
-        ticker = yf.Ticker(symbol)
-        news = getattr(ticker, "news", [])
-        if not isinstance(news, list) or len(news) == 0:
-            return []
-
-        articles = []
-        for n in news[:max_items]:
-            title = n.get("title")
-            link = n.get("link")
-            if not title or not link:
-                # Daten fehlerhaft → ignorieren
-                continue
-            articles.append(NewsItem(title=title, link=link, source="Yahoo Finance"))
-
-        return articles
-    except Exception as e:
-        logger.error(f"Yahoo news error for {symbol}: {e}")
-        return []
-
-
-def get_all_news(symbols: List[str], prefer_yf: bool = True) -> Dict[str, List[NewsItem]]:
-    """Holt News für mehrere Aktien, robust mit Yahoo+RSS Fallback."""
     all_news: Dict[str, List[NewsItem]] = {}
 
-    for sym in symbols:
+    for item in items:
+        ticker = item["ticker"]
+        name = item["name"]
+
         try:
-            articles = fetch_yf_news(sym) if prefer_yf else []
-            if not articles:
-                articles = fetch_rss_news(sym)
-            all_news[sym] = articles
-            if not articles:
-                logger.warning(f"Keine News für {sym}")
+            news = fetch_rss_news(name)
+            all_news[ticker] = news
+
+            if not news:
+                logger.warning(f"Keine News gefunden für {name} ({ticker})")
+
         except Exception as e:
-            logger.error(f"Unbekannter Fehler bei {sym}: {e}")
+            logger.error(f"Error fetching news for {name} ({ticker}): {e}")
+            all_news[ticker] = []
+
     return all_news

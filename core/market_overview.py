@@ -60,9 +60,15 @@ def generate_market_overview(portfolio_data, summaries):
     Sprache: Deutsch, Stil: wirtschaftlich-verständlich, Länge: mittel (3–5 Sätze pro Abschnitt)
     """
     try:
+        # -----------------------------
+        # STAGE 4 FIX:
+        # Name-only Ausgabe, kein Ticker, kein Klammerformat mehr
+        # -----------------------------
         kursdaten = ", ".join(
-            [f"{s.symbol} ({s.change_percent:+.2f}%)" for s in portfolio_data]
+            [f"{s.symbol}: {s.change_percent:+.2f}%" for s in portfolio_data]
         )
+        # ------------------------------
+
         joined_summaries = "\n".join(summaries)
 
         # Prompt laden und formatieren
@@ -112,4 +118,3 @@ def parse_market_overview(text: str):
             "emoji": emoji,
         },
     }
-

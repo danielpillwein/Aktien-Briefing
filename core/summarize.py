@@ -21,7 +21,7 @@ def summarize_article(article_text: str) -> str:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a financial news summarizer."},
+                {"role": "system", "content": f"You are a professional financial summarizer. Use the TLDR style internally but do NOT output 'TLDR:'. Respond only in {settings.get('language', 'de')}."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.4,
