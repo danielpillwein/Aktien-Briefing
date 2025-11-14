@@ -1,11 +1,11 @@
-TLDR: Fasse den folgenden Nachrichtenartikel in EINEM prägnanten Satz zusammen.
+TLDR: Fasse den folgenden Nachrichtenartikel in EINEM prägnanten Satz inhaltlich zusammen.
 Ziel: kurze, sachliche, wirtschaftlich relevante Zusammenfassung.
 
 WICHTIG:
 - Verwende NIEMALS Börsenticker oder Wertpapierkürzel (z. B. MSFT, GOOG, GOOGL, PLTR, TSM, AVGO).
 - Nutze ausschließlich ausgeschriebene Unternehmensnamen.
 - Keine Formatierungen, kein Markdown, keine Listen.
-- Antwortsprache: {language}
+- Antworte außschließlich in folgender Sprache (das ist das Kürzel der Sprache): {language}
 
 Artikel:
 {article_text}

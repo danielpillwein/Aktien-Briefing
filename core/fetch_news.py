@@ -1,86 +1,58 @@
 import feedparser
+import asyncio
 from loguru import logger
-from typing import Dict, List
-from pydantic import BaseModel
-import time
-import urllib.parse
+from urllib.parse import quote_plus
+from utils.preprocess import clean_title, remove_boilerplate, limit_length
+
+# ================================================================
+# Newsquellen (Stage 5)
+# ================================================================
+SOURCES = [
+    "https://news.google.com/rss/search?q={query}+stock&hl=en-US&gl=US&ceid=US:en",
+    "https://feeds.finance.yahoo.com/rss/2.0/headline?s={query}&region=US&lang=en-US",
+    "https://www.bing.com/news/search?q={query}+stock&format=rss"
+]
 
 
-class NewsItem(BaseModel):
-    title: str
-    link: str
-    source: str
+# ================================================================
+# Einzelne Quelle abrufen
+# ================================================================
+def fetch_source(url: str):
+    feed = feedparser.parse(url)
+    results = []
+
+    for e in feed.entries[:5]:  # harte Begrenzung für Speed & Kosten
+        content = e.get("summary", "") or e.get("description", "")
+
+        article = {
+            "title": clean_title(e.title),
+            "content": limit_length(remove_boilerplate(content)),
+            "link": e.link,
+        }
+        results.append(article)
+
+    return results
 
 
-def fetch_rss_news(name: str, max_items: int = 5) -> List[NewsItem]:
-    """
-    Holt Nachrichten ausschließlich über RSS:
-    - Google News RSS
-    - Yahoo Finance RSS (nicht über API!)
+# ================================================================
+# ALLE Quellen parallel abrufen
+# ================================================================
+async def fetch_all_sources(name: str):
+    """Holt News für eine Aktie (Stage 5)."""
 
-    Query basiert immer auf dem Firmennamen.
-    """
-    safe_query = urllib.parse.quote_plus(f"{name} stock")
+    # Kritisch: URL-ENCODING!
+    encoded_query = quote_plus(name)
 
-    feeds = [
-        f"https://news.google.com/rss/search?q={safe_query}",
-        f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={safe_query}&region=US&lang=en-US",
-    ]
+    # URLs bauen
+    urls = [src.format(query=encoded_query) for src in SOURCES]
 
-    articles: List[NewsItem] = []
+    # Parsen parallel ausführen
+    tasks = [asyncio.to_thread(fetch_source, url) for url in urls]
+    results_per_source = await asyncio.gather(*tasks)
 
-    for feed_url in feeds:
-        try:
-            parsed = feedparser.parse(feed_url)
+    # Flach machen
+    all_articles = [item for sub in results_per_source for item in sub]
 
-            if not parsed.entries:
-                continue
+    logger.info(f"{name}: {len(all_articles)} Artikel geladen.")
 
-            for entry in parsed.entries[:max_items]:
-                title = entry.get("title")
-                link = entry.get("link")
-
-                if not title or not link:
-                    continue
-
-                articles.append(
-                    NewsItem(
-                        title=title,
-                        link=link,
-                        source=feed_url.split("/")[2],
-                    )
-                )
-
-        except Exception as e:
-            logger.error(f"RSS error for '{name}': {e}")
-
-        time.sleep(0.25)
-
-    return articles
-
-
-def get_all_news(items: List[dict]) -> Dict[str, List[NewsItem]]:
-    """
-    Holt Nachrichten für mehrere Aktien basierend auf:
-    ticker = interner Key
-    name   = RSS-Suchbegriff
-    Rückgabe: {ticker: [NewsItem, ...]}
-    """
-    all_news: Dict[str, List[NewsItem]] = {}
-
-    for item in items:
-        ticker = item["ticker"]
-        name = item["name"]
-
-        try:
-            news = fetch_rss_news(name)
-            all_news[ticker] = news
-
-            if not news:
-                logger.warning(f"Keine News gefunden für {name} ({ticker})")
-
-        except Exception as e:
-            logger.error(f"Error fetching news for {name} ({ticker}): {e}")
-            all_news[ticker] = []
-
-    return all_news
+    return all_articles

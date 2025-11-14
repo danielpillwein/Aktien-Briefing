@@ -15,11 +15,11 @@ def render_report(data: dict) -> Path:
 
         report_date = datetime.now().strftime("%Y-%m-%d")
         rendered = template.render(
-            date=report_date,
             portfolio=data["portfolio"],
             watchlist=data["watchlist"],
             news=data["news"],
             overview=data["overview"],
+            date=data["date"],
         )
 
         output_path = output_dir / f"{report_date}.md"

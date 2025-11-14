@@ -1,11 +1,24 @@
 Analysiere die folgende Zusammenfassung und bestimme das Marktsentiment.
-Ergebnis muss eines der drei Wörter sein: Positiv, Neutral oder Negativ.
+
+Wähle eines der drei Wörter:
+- positiv
+- neutral
+- negativ
 
 WICHTIG:
-- Verwende in deiner Analyse und Einschätzung NIEMALS Börsenticker oder Wertpapierkürzel (z. B. MSFT, GOOG, PLTR, TSM, AVGO).
-- Nutze ausschließlich ausgeschriebene Unternehmensnamen.
+- Verwende niemals Börsenticker oder Wertpapierkürzel.
+- Verwende ausschließlich ausgeschriebene Unternehmensnamen.
 - Schreibe klar, einfach und prägnant.
-Antwortsprache: {language}
+- Antworte ausschließlich in folgender Sprache: {language}
+
+GIB DIE ANTWORT AUSSCHLIESSLICH ALS VALIDES JSON AUS.
+KEIN MARKDOWN, KEINE BACKTICKS, KEINE ERKLÄRUNG.
+
+FORMAT:
+{
+  "summary": "1–2 kurze Sätze",
+  "sentiment": "positiv | neutral | negativ"
+}
 
 Text:
 {summary_text}
