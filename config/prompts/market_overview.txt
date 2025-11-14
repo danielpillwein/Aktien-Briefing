@@ -1,4 +1,4 @@
-Erstelle eine klare, wirtschaftlich formulierte Marktanalyse in {language}.
+Erstelle eine klare, wirtschaftlich formulierte Marktanalyse.
 Die Analyse soll die wichtigsten Entwicklungen kompakt und verständlich darstellen.
 Fokussiere dich auf relevante Kursbewegungen und Nachrichten, ohne unnötige Details.
 
@@ -13,14 +13,15 @@ WICHTIG:
 - Verwende NIEMALS Tickersymbole oder Wertpapierkürzel (z. B. MSFT, GOOG, GOOGL, PLTR, TSM, AVGO).
 - Schreibe ausschließlich ausgeschriebene Unternehmensnamen.
 - Klar, prägnant, wirtschaftlich sinnvoll.
+- Antworte außschließlich in folgender Sprache (das ist das Kürzel der Sprache): {language}
 
 Antwortstruktur:
 
-**Makro:**
-(Ein prägnanter Satz über die allgemeine Marktentwicklung, Trends, Risiken oder Chancen.)
+Makro:
+(EIN prägnanter Satz über die allgemeine Marktentwicklung, Trends, Risiken oder Chancen.)
 
-**Portfolio:**
-(Ein prägnanter Satz über die wichtigsten Kursbewegungen, Entwicklungen oder Stimmungsimpulse.)
+Portfolio:
+(EIN prägnanter Satz über die wichtigsten Kursbewegungen, Entwicklungen oder Stimmungsimpulse.)
 
-**Gesamteinschätzung:**
-(Ein prägnanter Satz mit einer klaren Richtung – Positiv, Neutral oder Negativ – und einem passenden Emoji.)
+Gesamteinschätzung:
+(EIN prägnanter Satz mit einer klaren Richtung – Positiv, Neutral oder Negativ – und einem passenden Emoji.)

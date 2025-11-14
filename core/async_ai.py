@@ -1,81 +1,102 @@
 import asyncio
-import random
-from openai import AsyncOpenAI
+import os
+import json
+from dotenv import load_dotenv
 from loguru import logger
-from utils.cache import load_cache, save_cache, get_cached_result, set_cached_result
-import yaml
-from pathlib import Path
-
-client = AsyncOpenAI()
-with open(Path("config/settings.yaml"), "r", encoding="utf-8") as f:
-    settings = yaml.safe_load(f)
-perf = settings.get("performance", {})
-CACHE_ENABLED = perf.get("cache_enabled", True)
-RETRIES = perf.get("retries", 3)
-MAX_TASKS = perf.get("max_concurrent_tasks", 5)
-
-cache = load_cache()
+from openai import AsyncOpenAI
+from utils.prompt_loader import load_prompt
 
 
-async def async_summarize(title: str, semaphore: asyncio.Semaphore):
-    """Fasst Artikel mit GPT asynchron zusammen (mit Cache & Retry)."""
-    cache_key = f"summary::{title.strip().lower()}"
-    if CACHE_ENABLED and (cached := get_cached_result(cache, cache_key)):
-        logger.debug(f"Cache hit für {title}")
+from utils.cache import get_cache, set_cache
+from utils.preprocess import clean_text
+
+# ---------------------------------------------------------
+# .env laden
+# ---------------------------------------------------------
+load_dotenv()
+
+# ---------------------------------------------------------
+# OpenAI Client
+# ---------------------------------------------------------
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# ---------------------------------------------------------
+# Parallelitätslimit (OpenAI limitiert ≈ 5–8 gleichzeitige Requests)
+# ---------------------------------------------------------
+SEMAPHORE = asyncio.Semaphore(5)
+
+SENTIMENT_TO_EMOJI = {
+    "positiv": "🟢",
+    "neutral": "🟡",
+    "negativ": "🔴",
+}
+
+
+# =========================================================
+#  SANITIZE KI-Antwort (Backticks, Markdown entfernen)
+# =========================================================
+def clean_json_output(text: str) -> str:
+    if not text:
+        return ""
+
+    text = text.strip()
+
+    # Entferne ```json ... ```
+    if text.startswith("```"):
+        text = text.strip("`")
+        text = text.replace("json", "", 1).strip()
+
+    return text
+
+
+# =========================================================
+#  INTERNE IMPLEMENTIERUNG – EIN Request pro Artikel!!
+# =========================================================
+async def _process_internal(article):
+    cache_key = f"combo::{article['title']}"
+    cached = get_cache(cache_key)
+    if cached:
         return cached
 
-    async with semaphore:
-        for attempt in range(RETRIES):
-            try:
-                logger.debug(f"Summarizing ({attempt+1}/{RETRIES}): {title}")
-                resp = await client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": f"You are a professional financial summarizer. Use the TLDR style internally but do NOT output 'TLDR:'. Respond only in {settings.get('language', 'de')}."},
-                        {"role": "user", "content": title},
-                    ],
-                    max_tokens=150,
-                    temperature=0.5,
-                )
-                summary = resp.choices[0].message.content.strip()
-                if CACHE_ENABLED:
-                    set_cached_result(cache, cache_key, summary)
-                    save_cache(cache)
-                return summary
-            except Exception as e:
-                logger.warning(f"Fehler bei async_summarize ({attempt+1}/{RETRIES}): {e}")
-                await asyncio.sleep(1.5 * (attempt + 1))
-        return "(Fehler bei Zusammenfassung)"
+    cleaned = clean_text(article["content"])
 
+    # Prompt sicher laden
+    base_prompt = load_prompt("sentiment")
 
-async def async_sentiment(summary: str, semaphore: asyncio.Semaphore):
-    """Analysiert Stimmung asynchron (mit Cache & Retry)."""
-    cache_key = f"sentiment::{summary.strip().lower()[:150]}"
-    if CACHE_ENABLED and (cached := get_cached_result(cache, cache_key)):
-        logger.debug("Cache hit für Sentiment.")
-        return cached
+    # Platzhalter sicher ersetzen
+    prompt = base_prompt.replace("{summary_text}", cleaned)
 
-    async with semaphore:
-        for attempt in range(RETRIES):
-            try:
-                logger.debug(f"Sentimentanalyse ({attempt+1}/{RETRIES})")
-                resp = await client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": f"You are a financial sentiment analyzer. Respond only with Positiv, Neutral or Negativ in {settings.get('language', 'de')}."},
-                        {"role": "user", "content": summary},
-                    ],
-                    max_tokens=5,
-                    temperature=0,
-                )
-                sentiment = resp.choices[0].message.content.strip().capitalize()
-                if sentiment not in ["Positiv", "Neutral", "Negativ"]:
-                    sentiment = "Neutral"
-                if CACHE_ENABLED:
-                    set_cached_result(cache, cache_key, sentiment)
-                    save_cache(cache)
-                return sentiment
-            except Exception as e:
-                logger.warning(f"Fehler bei async_sentiment ({attempt+1}/{RETRIES}): {e}")
-                await asyncio.sleep(1.5 * (attempt + 1))
-        return "Neutral"
+    # API Request
+    response = await client.responses.create(
+        model="gpt-4.1-mini",
+        input=prompt
+    )
+
+    raw = clean_json_output(response.output_text)
+
+    try:
+        data = json.loads(raw)
+        sent = data.get("sentiment", "neutral").lower()
+        data["emoji"] = SENTIMENT_TO_EMOJI.get(sent, "🟡")
+    except:
+        logger.error(f"⚠️ KI-Ausgabe nicht parsebar: {response.output_text}")
+        data = {
+            "summary": "Keine Zusammenfassung verfügbar.",
+            "sentiment": "neutral",
+            "emoji": "🟡"
+        }
+
+    set_cache(cache_key, data)
+    return data
+
+# =========================================================
+#  ÖFFENTLICHE API – nutzt Semaphore (Rate-Limit fix)
+# =========================================================
+async def process_article(article):
+    """
+    Wrappt den internen Prozessor mit einem Semaphore,
+    damit die Pipeline nie vom OpenAI-Rate-Limiter
+    in serielle Verarbeitung gezwungen wird.
+    """
+    async with SEMAPHORE:
+        return await _process_internal(article)

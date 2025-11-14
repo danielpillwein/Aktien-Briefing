@@ -1,171 +1,222 @@
 import asyncio
-import yaml
-from pathlib import Path
-from utils.logger import get_logger
-from .fetch_prices import get_price_changes
-from .fetch_news import get_all_news
-from .market_overview import summarize_portfolio_news, generate_market_overview
-from .async_ai import async_summarize, async_sentiment
-from .report_builder import render_report
+from loguru import logger
+
+from config.settings_loader import load_settings
+from core.fetch_news import fetch_all_sources
+from core.async_ai import process_article
+from core.market_overview import generate_market_overview
+from core.fetch_prices import get_price_changes
+from utils.archive_manager import archive_briefing
 from utils.notifications import send_briefing_blocks
-from utils.archive_manager import archive_report
-
-logger = get_logger("BriefingAgent")
+from core.report_builder import render_report
 
 
-async def process_article(ticker: str, article, semaphore: asyncio.Semaphore):
-    """Fasst Artikel zusammen + bestimmt Sentiment asynchron."""
-    summary = await async_summarize(article.title, semaphore)
-    sentiment = await async_sentiment(summary, semaphore)
-    emoji = {"Positiv": "🟢", "Neutral": "🟡", "Negativ": "🔴"}[sentiment]
+# ---------------------------------------
+# Kursformatierung
+# ---------------------------------------
+def format_stock(s):
+    try:
+        change = float(s.change_percent)
 
-    return ticker, {
-        "summary": summary,
-        "sentiment": sentiment,
-        "emoji": emoji,
-        "title": article.title,
-        "link": article.link,
-    }
-
-
-async def process_articles_async(news_portfolio, news_watchlist):
-    """Verarbeitet alle Artikel (Portfolio + Watchlist) asynchron im selben Loop."""
-    semaphore = asyncio.Semaphore(5)
-    tasks = []
-
-    combined = {**news_portfolio, **news_watchlist}
-
-    for ticker, articles in combined.items():
-        for a in articles[:2]:
-            tasks.append(process_article(ticker, a, semaphore))
-
-    results = await asyncio.gather(*tasks)
-    out_portfolio, out_watchlist = {}, {}
-
-    for ticker, data in results:
-        if ticker in news_portfolio:
-            out_portfolio.setdefault(ticker, []).append(data)
-        else:
-            out_watchlist.setdefault(ticker, []).append(data)
-
-    return out_portfolio, out_watchlist
-
-
-def run_briefing_test(send_telegram: bool = True):
-    """Führt gesamten Agenten im Testmodus aus: Kurse, News, KI, Report, Telegram."""
-    with open(Path("config/settings.yaml"), "r", encoding="utf-8") as f:
-        settings = yaml.safe_load(f)
-
-    portfolio_items = settings["portfolio"]
-    watchlist_items = settings["watchlist"]
-
-    logger.info("Hole Kursdaten.")
-    portfolio_data, last_date = get_price_changes(portfolio_items)
-    watchlist_data, _ = get_price_changes(watchlist_items)
-
-    print(f"\n📅 Letzter Handelstag: {last_date}\n")
-
-    logger.info("Rufe aktuelle Nachrichten ab.")
-    news_portfolio_raw = get_all_news(portfolio_items)
-    news_watchlist_raw = get_all_news(watchlist_items)
-
-    logger.info("Starte parallele KI-Analyse.")
-    portfolio_results_raw, watchlist_results_raw = asyncio.run(
-        process_articles_async(news_portfolio_raw, news_watchlist_raw)
-    )
-
-    # ---------------------------------------------------------
-    #  STAGE-4: Ticker-Keys → Name-Keys für Report & Telegram
-    # ---------------------------------------------------------
-
-    name_map_portfolio = {item["ticker"]: item["name"] for item in portfolio_items}
-    name_map_watchlist = {item["ticker"]: item["name"] for item in watchlist_items}
-
-    # Convert news dicts to NAME-keys
-    news_portfolio = {
-        name_map_portfolio[ticker]: articles
-        for ticker, articles in portfolio_results_raw.items()
-    }
-
-    news_watchlist = {
-        name_map_watchlist[ticker]: articles
-        for ticker, articles in watchlist_results_raw.items()
-    }
-
-    # ---------------------------------------------------------
-
-    print("\n## 📊 Portfolio")
-    summaries = []
-
-    for item in portfolio_items:
-        name = item["name"]
-        ticker = item["ticker"]
-        arts = portfolio_results_raw.get(ticker, [])
-
-        print(f"\n### {name}")
-        for a in arts:
-            print(f"- {a['summary']}")
-            print(f"  Einschätzung: {a['emoji']} {a['sentiment']}")
-            print(f"  🔗 {a['link']}\n")
-            summaries.append(a["summary"])
-
-    print("\n## 👁‍🗨 Watchlist")
-    for item in watchlist_items:
-        name = item["name"]
-        ticker = item["ticker"]
-        arts = watchlist_results_raw.get(ticker, [])
-
-        print(f"\n### {name}")
-        for a in arts:
-            print(f"- {a['summary']}")
-            print(f"  Einschätzung: {a['emoji']} {a['sentiment']}")
-            print(f"  🔗 {a['link']}\n")
-
-    logger.info("Erstelle Gesamtzusammenfassung.")
-    overall_summary = summarize_portfolio_news(summaries)
-    print("\n---\n")
-    print("🔍 **Gesamtzusammenfassung:**")
-    print(overall_summary)
-
-    logger.info("Erstelle Marktanalyse.")
-    overview = generate_market_overview(portfolio_data, summaries)
-
-    def format_stock(s):
-        if s.change_percent > 0.3:
+        if change > 0.3:
             emoji = "🟢"
-        elif s.change_percent < -0.3:
+        elif change < -0.3:
             emoji = "🔴"
         else:
             emoji = "🟡"
 
         return {
-            "symbol": s.symbol,       # Name-only (Stage-4)
-            "change": f"{s.change_percent:+.2f}%",
+            "symbol": getattr(s, "symbol", "Unknown"),
+            "change": f"{change:+.2f}%",
             "emoji": emoji,
         }
+    except Exception as e:
+        logger.error(f"FormatStock Fehler: {e}")
+        return {
+            "symbol": getattr(s, "symbol", "Unknown"),
+            "change": "0.00%",
+            "emoji": "🟡",
+        }
 
-    # ---------------------------------------------------------
-    # STAGE-4: Report-Daten NUR mit Name-Keys
-    # ---------------------------------------------------------
-    data_for_report = {
-        "portfolio": [format_stock(s) for s in portfolio_data],
-        "watchlist": [format_stock(s) for s in watchlist_data],
-        "news": {
-            "portfolio": news_portfolio,   # Name-based
-            "watchlist": news_watchlist,   # Name-based
-        },
-        "overview": overview,
-    }
-    # ---------------------------------------------------------
 
-    render_report(data_for_report)
+# ---------------------------------------
+# News-Analyse
+# ---------------------------------------
+async def analyze_news_for_items(items):
+    results = {}
 
+    for item in items:
+        name = item["name"]
+
+        logger.info(f"Hole News für {name}…")
+        raw_articles = await fetch_all_sources(name)
+
+        if not raw_articles:
+            results[name] = []
+            continue
+
+        logger.info(f"Analysiere {len(raw_articles)} Artikel für {name}…")
+
+        tasks = [asyncio.create_task(process_article(a)) for a in raw_articles]
+        processed = await asyncio.gather(*tasks)
+
+        structured = []
+        for raw, ai in zip(raw_articles, processed):
+            structured.append({
+                "title": raw["title"],
+                "summary": ai["summary"],
+                "sentiment": f"{ai['sentiment'].capitalize()} {ai['emoji']}",
+                "link": raw["link"],
+            })
+
+        results[name] = structured
+
+    return results
+
+
+async def gather_news_parallel(portfolio_items, watchlist_items):
+    return await asyncio.gather(
+        asyncio.create_task(analyze_news_for_items(portfolio_items)),
+        asyncio.create_task(analyze_news_for_items(watchlist_items))
+    )
+
+
+# ---------------------------------------
+# Telegram Block Builder
+# ---------------------------------------
+def build_telegram_blocks(date, pf, wl, news, overview):
+    blocks = []
+
+    # ==== PORTFOLIO ====
+    pf_content = "\n".join(f"{x['symbol']}: {x['change']} {x['emoji']}" for x in pf)
+    blocks.append({
+        "title": f"Portfolio ({date})",
+        "emoji": "📈",
+        "content": pf_content
+    })
+
+    # ==== WATCHLIST ====
+    wl_content = "\n".join(f"{x['symbol']}: {x['change']} {x['emoji']}" for x in wl)
+    blocks.append({
+        "title": f"Watchlist ({date})",
+        "emoji": "👀",
+        "content": wl_content
+    })
+
+    # ==== PORTFOLIO NEWS ====
+    pf_news = ""
+    for stock, items in news["portfolio"].items():
+        pf_news += f"<b>{stock}:</b>\n"
+        for n in items[:3]:
+            pf_news += (
+                f"- {n['summary']}\n"
+                f"({n['sentiment']}) <a href=\"{n['link']}\">hier nachlesen</a>\n"
+            )
+        pf_news += "\n"
+
+    blocks.append({
+        "title": "Portfolio-News",
+        "emoji": "📰",
+        "content": pf_news.strip()
+    })
+
+    # ==== WATCHLIST NEWS ====
+    wl_news = ""
+    for stock, items in news["watchlist"].items():
+        wl_news += f"<b>{stock}:</b>\n"
+        for n in items[:3]:
+            wl_news += (
+                f"- {n['summary']}\n"
+                f"({n['sentiment']}) <a href=\"{n['link']}\">hier nachlesen</a>\n"
+            )
+        wl_news += "\n"
+
+    blocks.append({
+        "title": "Watchlist-News",
+        "emoji": "🗞️",
+        "content": wl_news.strip()
+    })
+
+    # ==== MARKTANALYSE ====
+    market_text = (
+        f"<b>Makro:</b>\n{overview['macro']}\n\n"
+        f"<b>Portfolio:</b>\n{overview['portfolio']}\n\n"
+        f"<b>Fazit:</b>\n{overview['final']['emoji']} {overview['final']['text']}"
+    )
+
+    blocks.append({
+        "title": "Marktanalyse",
+        "emoji": "🌍",
+        "content": market_text
+    })
+
+    return blocks
+
+
+# ---------------------------------------
+# Main Pipeline
+# ---------------------------------------
+def run_briefing_test(send_telegram=True):
+    logger.info("📊 Starte Aktienbriefing…")
+
+    settings = load_settings()
+    pf_items = settings["portfolio"]
+    wl_items = settings["watchlist"]
+
+    # 1 PRICES
+    logger.info("💹 Hole Kursdaten…")
+    pf_data, date = get_price_changes(pf_items)
+    wl_data, _ = get_price_changes(wl_items)
+
+    # 2 NEWS
+    logger.info("📰 Starte parallele News-Analyse…")
+    news_pf, news_wl = asyncio.run(gather_news_parallel(pf_items, wl_items))
+
+    all_summaries = [
+        ai["summary"]
+        for arr in news_pf.values()
+        for ai in arr
+    ]
+
+    # 3 MARKET OVERVIEW
+    logger.info("🌍 Erstelle Marktanalyse…")
+    overview = generate_market_overview(pf_data, all_summaries)
+
+    pf_fmt = [format_stock(s) for s in pf_data]
+    wl_fmt = [format_stock(s) for s in wl_data]
+
+    # Telegram
     if send_telegram:
-        logger.info("📨 Sende Telegram-Blöcke (Testmodus).")
-        send_briefing_blocks(data_for_report)
+        blocks = build_telegram_blocks(
+            date, pf_fmt, wl_fmt,
+            {"portfolio": news_pf, "watchlist": news_wl},
+            overview
+        )
+        send_briefing_blocks(blocks)
 
-    logger.info("📦 Archiviere Report.")
-    archive_report()
+    # Debug-JSON speichern
+    render_report({
+        "date": date,
+        "portfolio": pf_fmt,
+        "watchlist": wl_fmt,
+        "news": {"portfolio": news_pf, "watchlist": news_wl},
+        "overview": overview,
+    })
 
-    logger.info("✓ Briefing abgeschlossen.")
-    return data_for_report
+    # JSONL-Archivierung
+    archive_entry = {
+        "date": date,
+        "portfolio": pf_fmt,
+        "watchlist": wl_fmt,
+        "news": {
+            "portfolio": news_pf,
+            "watchlist": news_wl
+        },
+        "market_overview": overview,
+        "version": "1.0.0"
+    }
+
+    archive_briefing(archive_entry)
+
+    logger.info("✅ Briefing abgeschlossen.")
+    return True

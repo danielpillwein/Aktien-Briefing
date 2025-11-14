@@ -1,32 +1,27 @@
-from jinja2 import Environment, FileSystemLoader
+import json
 from pathlib import Path
 from datetime import datetime
 from loguru import logger
 
+
 def render_report(data: dict) -> Path:
-    """Erstellt einen Markdown-Report aus den Briefing-Daten."""
+    """
+    Speichert das Briefing als JSON Datei (nicht JSONL!).
+    Dient nur zur lokalen Einsicht / Debugging.
+    Die echte Archivierung passiert in archive_manager.py als JSONL.
+    """
     try:
-        template_dir = Path("templates")
         output_dir = Path("outputs/briefings")
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        env = Environment(loader=FileSystemLoader(template_dir))
-        template = env.get_template("briefing.md.j2")
+        file_path = output_dir / f"{data['date']}.json"
 
-        report_date = datetime.now().strftime("%Y-%m-%d")
-        rendered = template.render(
-            date=report_date,
-            portfolio=data["portfolio"],
-            watchlist=data["watchlist"],
-            news=data["news"],
-            overview=data["overview"],
-        )
+        with file_path.open("w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
-        output_path = output_dir / f"{report_date}.md"
-        output_path.write_text(rendered, encoding="utf-8")
+        logger.info(f"📄 Debug-Report gespeichert unter: {file_path}")
+        return file_path
 
-        logger.info(f"📄 Briefing gespeichert unter: {output_path}")
-        return output_path
     except Exception as e:
-        logger.error(f"Fehler beim Rendern des Reports: {e}")
+        logger.error(f"Fehler beim Speichern des JSON-Reports: {e}")
         return None
