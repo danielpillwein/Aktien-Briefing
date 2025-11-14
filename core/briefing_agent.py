@@ -6,9 +6,9 @@ from core.fetch_news import fetch_all_sources
 from core.async_ai import process_article
 from core.market_overview import generate_market_overview
 from core.fetch_prices import get_price_changes
-from core.report_builder import render_report
-from utils.archive_manager import archive_report
+from utils.archive_manager import archive_briefing
 from utils.notifications import send_briefing_blocks
+from core.report_builder import render_report
 
 
 # ---------------------------------------
@@ -88,23 +88,17 @@ def build_telegram_blocks(date, pf, wl, news, overview):
     blocks = []
 
     # ==== PORTFOLIO ====
-    pf_title = f"Portfolio ({date})"
-    pf_content = "\n".join(
-        f"{x['symbol']}: {x['change']} {x['emoji']}" for x in pf
-    )
+    pf_content = "\n".join(f"{x['symbol']}: {x['change']} {x['emoji']}" for x in pf)
     blocks.append({
-        "title": pf_title,
+        "title": f"Portfolio ({date})",
         "emoji": "📈",
         "content": pf_content
     })
 
     # ==== WATCHLIST ====
-    wl_title = f"Watchlist ({date})"
-    wl_content = "\n".join(
-        f"{x['symbol']}: {x['change']} {x['emoji']}" for x in wl
-    )
+    wl_content = "\n".join(f"{x['symbol']}: {x['change']} {x['emoji']}" for x in wl)
     blocks.append({
-        "title": wl_title,
+        "title": f"Watchlist ({date})",
         "emoji": "👀",
         "content": wl_content
     })
@@ -116,8 +110,7 @@ def build_telegram_blocks(date, pf, wl, news, overview):
         for n in items[:3]:
             pf_news += (
                 f"- {n['summary']}\n"
-                f"({n['sentiment']}) "
-                f"<a href=\"{n['link']}\">hier nachlesen</a>\n"
+                f"({n['sentiment']}) <a href=\"{n['link']}\">hier nachlesen</a>\n"
             )
         pf_news += "\n"
 
@@ -134,8 +127,7 @@ def build_telegram_blocks(date, pf, wl, news, overview):
         for n in items[:3]:
             wl_news += (
                 f"- {n['summary']}\n"
-                f"({n['sentiment']}) "
-                f"<a href=\"{n['link']}\">hier nachlesen</a>\n"
+                f"({n['sentiment']}) <a href=\"{n['link']}\">hier nachlesen</a>\n"
             )
         wl_news += "\n"
 
@@ -190,11 +182,10 @@ def run_briefing_test(send_telegram=True):
     logger.info("🌍 Erstelle Marktanalyse…")
     overview = generate_market_overview(pf_data, all_summaries)
 
-    # Formatieren
     pf_fmt = [format_stock(s) for s in pf_data]
     wl_fmt = [format_stock(s) for s in wl_data]
 
-    # Telegram-Blöcke
+    # Telegram
     if send_telegram:
         blocks = build_telegram_blocks(
             date, pf_fmt, wl_fmt,
@@ -203,7 +194,7 @@ def run_briefing_test(send_telegram=True):
         )
         send_briefing_blocks(blocks)
 
-    # Datei rendern
+    # Debug-JSON speichern
     render_report({
         "date": date,
         "portfolio": pf_fmt,
@@ -212,8 +203,20 @@ def run_briefing_test(send_telegram=True):
         "overview": overview,
     })
 
-    # Archivieren
-    archive_report()
+    # JSONL-Archivierung
+    archive_entry = {
+        "date": date,
+        "portfolio": pf_fmt,
+        "watchlist": wl_fmt,
+        "news": {
+            "portfolio": news_pf,
+            "watchlist": news_wl
+        },
+        "market_overview": overview,
+        "version": "1.0.0"
+    }
+
+    archive_briefing(archive_entry)
 
     logger.info("✅ Briefing abgeschlossen.")
     return True
