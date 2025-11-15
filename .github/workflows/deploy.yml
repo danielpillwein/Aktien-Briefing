@@ -21,19 +21,18 @@ jobs:
           username: aktienbot
           key: ${{ secrets.DEPLOY_KEY }}
           script: |
+            git config --global --add safe.directory /opt/aktienbriefing
             cd /opt/aktienbriefing
             git fetch --all
             git reset --hard origin/main || git reset --hard origin/master
             git pull
             
-            if [ ! -d ".venv" ]; then
-              python3 -m venv .venv
-            fi
-            
+            rm -rf .venv
+            python3 -m venv .venv
             source .venv/bin/activate
             pip install -r requirements.txt
 
             sudo systemctl daemon-reload || true
-            sudo systemctl restart aktienbriefing
+            systemctl --user restart aktienbriefing
 
             echo "✅ Deployment erfolgreich abgeschlossen auf Hetzner!"
