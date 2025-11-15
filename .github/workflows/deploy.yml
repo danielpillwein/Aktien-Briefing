@@ -22,7 +22,18 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           script: |
             cd /opt/aktienbriefing
-            git reset --hard HEAD
+            git fetch --all
+            git reset --hard origin/main || git reset --hard origin/master
             git pull
+            
+            if [ ! -d ".venv" ]; then
+              python3 -m venv .venv
+            fi
+            
+            source .venv/bin/activate
+            pip install -r requirements.txt
+
+            sudo systemctl daemon-reload || true
             sudo systemctl restart aktienbriefing
-            echo "✅ Deployment erfolgreich auf Hetzner"
+
+            echo "✅ Deployment erfolgreich abgeschlossen auf Hetzner!"
