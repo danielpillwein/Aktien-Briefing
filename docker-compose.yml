@@ -1,0 +1,13 @@
+services:
+  aktienbriefing:
+    build: .
+    container_name: aktienbriefing
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./cache:/app/cache
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./archive:/app/archive
+      - ./logs:/app/logs

@@ -27,12 +27,17 @@ jobs:
             git reset --hard origin/main || git reset --hard origin/master
             git pull
             
-            rm -rf .venv
-            python3 -m venv .venv
-            source .venv/bin/activate
-            pip install -r requirements.txt
-
-            sudo systemctl daemon-reload || true
-            systemctl --user restart aktienbriefing
-
+            docker compose build --no-cache aktienbriefing
+            docker compose up -d aktienbriefing
+            
+            sleep 5
+            
+            if docker compose ps aktienbriefing | grep -q "Up"; then
+              echo "✅ Container läuft erfolgreich!"
+            else
+              echo "❌ FEHLER: Container ist nicht gestartet!"
+              docker compose logs aktienbriefing --tail=50
+              exit 1
+            fi
+            
             echo "✅ Deployment erfolgreich abgeschlossen auf Hetzner!"
