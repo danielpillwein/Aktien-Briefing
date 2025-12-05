@@ -1,4 +1,4 @@
-Analysiere die folgende Zusammenfassung und bestimme das Marktsentiment.
+Analysiere die folgende Zusammenfassung und bestimme das Marktsentiment für das darin beschriebene einzelne Unternehmen. Bewerte alle positiven und negativen Entwicklungen nach ihrem tatsächlichen wirtschaftlichen Impact und entscheide anhand des dominierenden Faktors, ob die Gesamttendenz positiv, neutral oder negativ ist.
 
 Wähle eines der drei Wörter:
 - positiv
@@ -6,19 +6,8 @@ Wähle eines der drei Wörter:
 - negativ
 
 WICHTIG:
-- Verwende niemals Börsenticker oder Wertpapierkürzel.
-- Verwende ausschließlich ausgeschriebene Unternehmensnamen.
-- Schreibe klar, einfach und prägnant.
-- Antworte ausschließlich in folgender Sprache: {language}
-
-GIB DIE ANTWORT AUSSCHLIESSLICH ALS VALIDES JSON AUS.
-KEIN MARKDOWN, KEINE BACKTICKS, KEINE ERKLÄRUNG.
-
-FORMAT:
-{
-  "summary": "1–2 kurze Sätze",
-  "sentiment": "positiv | neutral | negativ"
-}
+- Antworte AUSSCHLIESSLICH mit einem der drei Wörter: positiv, neutral, negativ
+- KEINE Erklärung, KEIN JSON, KEINE weiteren Zeichen
 
 Text:
 {summary_text}

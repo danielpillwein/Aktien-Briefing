@@ -1,12 +1,9 @@
 import asyncio
 import os
-import json
 from dotenv import load_dotenv
 from loguru import logger
 from openai import AsyncOpenAI
 from utils.prompt_loader import load_prompt
-
-
 from utils.cache import get_cache, set_cache
 from utils.preprocess import clean_text
 
@@ -33,24 +30,44 @@ SENTIMENT_TO_EMOJI = {
 
 
 # =========================================================
-#  SANITIZE KI-Antwort (Backticks, Markdown entfernen)
+#  STEP 1: Summary generieren
 # =========================================================
-def clean_json_output(text: str) -> str:
-    if not text:
-        return ""
-
-    text = text.strip()
-
-    # Entferne ```json ... ```
-    if text.startswith("```"):
-        text = text.strip("`")
-        text = text.replace("json", "", 1).strip()
-
-    return text
+async def _get_summary(article_content: str) -> str:
+    """Generiert eine Zusammenfassung des Artikels."""
+    prompt = load_prompt("summary").replace("{article_text}", article_content)
+    
+    response = await client.responses.create(
+        model="gpt-4.1-mini",
+        input=prompt
+    )
+    
+    return response.output_text.strip()
 
 
 # =========================================================
-#  INTERNE IMPLEMENTIERUNG – EIN Request pro Artikel!!
+#  STEP 2: Sentiment analysieren
+# =========================================================
+async def _get_sentiment(summary: str) -> str:
+    """Analysiert das Sentiment einer Zusammenfassung."""
+    prompt = load_prompt("sentiment").replace("{summary_text}", summary)
+    
+    response = await client.responses.create(
+        model="gpt-4.1-mini",
+        input=prompt
+    )
+    
+    raw = response.output_text.strip().lower()
+    
+    # Nur erlaubte Werte
+    if raw in ["positiv", "neutral", "negativ"]:
+        return raw
+    
+    logger.warning(f"⚠️ Unerwartetes Sentiment: {raw} → fallback neutral")
+    return "neutral"
+
+
+# =========================================================
+#  INTERNE IMPLEMENTIERUNG – ZWEI Requests pro Artikel
 # =========================================================
 async def _process_internal(article):
     cache_key = f"combo::{article['title']}"
@@ -60,34 +77,22 @@ async def _process_internal(article):
 
     cleaned = clean_text(article["content"])
 
-    # Prompt sicher laden
-    base_prompt = load_prompt("sentiment")
+    # Step 1: Summary
+    summary = await _get_summary(cleaned)
+    
+    # Step 2: Sentiment
+    sentiment = await _get_sentiment(summary)
+    emoji = SENTIMENT_TO_EMOJI.get(sentiment, "🟡")
 
-    # Platzhalter sicher ersetzen
-    prompt = base_prompt.replace("{summary_text}", cleaned)
-
-    # API Request
-    response = await client.responses.create(
-        model="gpt-4.1-mini",
-        input=prompt
-    )
-
-    raw = clean_json_output(response.output_text)
-
-    try:
-        data = json.loads(raw)
-        sent = data.get("sentiment", "neutral").lower()
-        data["emoji"] = SENTIMENT_TO_EMOJI.get(sent, "🟡")
-    except:
-        logger.error(f"⚠️ KI-Ausgabe nicht parsebar: {response.output_text}")
-        data = {
-            "summary": "Keine Zusammenfassung verfügbar.",
-            "sentiment": "neutral",
-            "emoji": "🟡"
-        }
+    data = {
+        "summary": summary,
+        "sentiment": sentiment,
+        "emoji": emoji
+    }
 
     set_cache(cache_key, data)
     return data
+
 
 # =========================================================
 #  ÖFFENTLICHE API – nutzt Semaphore (Rate-Limit fix)

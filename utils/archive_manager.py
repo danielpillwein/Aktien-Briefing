@@ -67,34 +67,7 @@ def archive_briefing(entry: dict):
         compress_old_archives(cfg.get("delete_after_days", 180))
 
 
-# =====================================================
-# 2) Alte .md ARCHIVE (kompatibel bleiben!)
-#    Falls alte Reports existieren → werden weiterhin archiviert & komprimiert.
-# =====================================================
-def archive_old_markdown_reports():
-    """
-    Archiviert die alten Markdown-Reports, falls noch vorhanden.
-    NUR für Rückwärtskompatibilität.
-    """
-    cfg = load_config()
-    if not cfg.get("enabled", True):
-        return
 
-    reports = sorted(OLD_OUTPUT_DIR.glob("*.md"), key=lambda p: p.stat().st_mtime)
-    if not reports:
-        return
-
-    latest = reports[-1]
-    date = datetime.now()
-    year, month = str(date.year), f"{date.month:02d}"
-
-    target_dir = ARCHIVE_DIR / year / month
-    ensure_dir(target_dir)
-
-    target_path = target_dir / latest.name
-    shutil.copy2(latest, target_path)
-
-    logger.info(f"📄 (Legacy) Markdown-Report archiviert: {target_path}")
 
 
 # =====================================================

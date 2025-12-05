@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import requests
 import time
 from loguru import logger
@@ -12,6 +13,7 @@ load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 MESSAGE_CACHE_FILE = Path("data/telegram_messages.json")
+TELEGRAM_MAX_LENGTH = 4000  # Sicherheitspuffer unter 4096
 
 if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
     raise RuntimeError("TELEGRAM_BOT_TOKEN oder TELEGRAM_CHAT_ID fehlen in .env!")
@@ -51,8 +53,60 @@ def clear_old_messages():
         except Exception as e:
             logger.error(f"Fehler beim Löschen von Nachricht {mid}: {e}")
 
-    # Cache leeren
     save_message_cache([])
+
+
+# ---------------------------------------------------------
+# HTML-Sanitizer: nur erlaubte Tags behalten
+# ---------------------------------------------------------
+def sanitize_html(text: str) -> str:
+    """Entfernt alle HTML-Tags außer <b>, </b>, <a href="...">, </a>."""
+    allowed_tags = []
+    
+    def save_tag(match):
+        idx = len(allowed_tags)
+        allowed_tags.append(match.group(0))
+        return f"__TAG_{idx}__"
+    
+    text = re.sub(r'<b>|</b>|<a\s+href="[^"]*">|</a>', save_tag, text, flags=re.IGNORECASE)
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    parts = re.split(r'(__TAG_\d+__)', text)
+    result = []
+    for part in parts:
+        if part.startswith('__TAG_') and part.endswith('__'):
+            idx = int(part[6:-2])
+            result.append(allowed_tags[idx])
+        else:
+            result.append(escape(part))
+    
+    return ''.join(result)
+
+
+# ---------------------------------------------------------
+# Nachricht in Chunks aufteilen (an Zeilenumbrüchen)
+# ---------------------------------------------------------
+def split_message(text: str, max_len: int = TELEGRAM_MAX_LENGTH) -> list:
+    """Teilt lange Nachrichten an Zeilenumbrüchen auf."""
+    if len(text) <= max_len:
+        return [text]
+    
+    chunks = []
+    lines = text.split('\n')
+    current = ""
+    
+    for line in lines:
+        if len(current) + len(line) + 1 <= max_len:
+            current += line + '\n'
+        else:
+            if current:
+                chunks.append(current.strip())
+            current = line + '\n'
+    
+    if current.strip():
+        chunks.append(current.strip())
+    
+    return chunks
 
 
 # ---------------------------------------------------------
@@ -60,50 +114,51 @@ def clear_old_messages():
 # ---------------------------------------------------------
 def send_telegram_message(text: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": False
-    }
+    
+    chunks = split_message(text)
+    
+    for chunk in chunks:
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": chunk,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True
+        }
 
-    try:
-        r = requests.post(url, data=payload, timeout=10)
-        if not r.ok:
-            logger.error(f"Telegram-Fehler: {r.text}")
-            return
+        try:
+            r = requests.post(url, data=payload, timeout=10)
+            if not r.ok:
+                logger.error(f"Telegram-Fehler: {r.text}")
+                continue
 
-        data = r.json()
+            data = r.json()
 
-        # message_id speichern
-        if "result" in data and "message_id" in data["result"]:
-            msg_ids = load_message_cache()
-            msg_ids.append(data["result"]["message_id"])
-            save_message_cache(msg_ids)
+            if "result" in data and "message_id" in data["result"]:
+                msg_ids = load_message_cache()
+                msg_ids.append(data["result"]["message_id"])
+                save_message_cache(msg_ids)
+                
+            time.sleep(0.1)
 
-    except Exception as e:
-        logger.error(f"Telegram Exception: {e}")
+        except Exception as e:
+            logger.error(f"Telegram Exception: {e}")
 
 
 # ---------------------------------------------------------
 # Blöcke senden (mit Löschen vorher!)
 # ---------------------------------------------------------
 def send_briefing_blocks(blocks: list):
-    """
-    blocks = [ { "title": "...", "emoji": "...", "content": "..." } ]
-    """
+    """blocks = [ { "title": "...", "emoji": "...", "content": "..." } ]"""
 
-    # 1️⃣ vor dem neuen Briefing: alte Nachrichten löschen
     clear_old_messages()
 
-    # 2️⃣ neue Blöcke senden
     for block in blocks:
         title = escape(block.get("title", "Block"))
         emoji = block.get("emoji", "")
         content = block.get("content", "")
 
-        content_html = content.replace("\n", "\n")
-        msg = f"<b>{emoji} {title}</b>\n{content_html}"
+        content_safe = sanitize_html(content)
+        msg = f"<b>{emoji} {title}</b>\n{content_safe}"
 
         send_telegram_message(msg)
         time.sleep(0.2)

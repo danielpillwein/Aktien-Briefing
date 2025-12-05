@@ -1,27 +1,27 @@
-Erstelle eine klare, wirtschaftlich formulierte Marktanalyse.
-Die Analyse soll die wichtigsten Entwicklungen kompakt und verständlich darstellen.
-Fokussiere dich auf relevante Kursbewegungen und Nachrichten, ohne unnötige Details.
+Erstelle eine klare, leicht verständliche Marktanalyse basierend auf den gelieferten Kerninformationen. Beschreibe, wie der Markt auf die Kursdaten reagiert, ob es mögliche Überreaktionen gibt und welche wirtschaftlichen Gründe diese Bewegungen auslösen. Nutze nur Fakten und eindeutig ableitbare wirtschaftliche Zusammenhänge. Maximale Länge: 200 Zeichen (inkl. Leerzeichen).
 
 Basisdaten:
-- Kursdaten: {kursdaten}
-- Nachrichten: {summaries}
+Kursdaten: {kursdaten}
+Nachrichten: {summaries}
 
 WICHTIG:
-- Schreibe ausschließlich im Fließtext.
+- Ausschließlich Fließtext.
 - Keine Listen, keine Fettschrift außer den Abschnittsüberschriften.
 - Keine Aufzählungen oder Sonderformatierungen.
-- Verwende NIEMALS Tickersymbole oder Wertpapierkürzel (z. B. MSFT, GOOG, GOOGL, PLTR, TSM, AVGO).
-- Schreibe ausschließlich ausgeschriebene Unternehmensnamen.
-- Klar, prägnant, wirtschaftlich sinnvoll.
-- Antworte außschließlich in folgender Sprache (das ist das Kürzel der Sprache): {language}
+- Keine Börsenticker oder Wertpapierkürzel.
+- Nutze ausschließlich ausgeschriebene Unternehmensnamen.
+- Schreibe kurz, klar, faktenorientiert und wirtschaftlich nachvollziehbar.
+- Beschreibe eindeutig erkennbare Chancen, Risiken, Marktreaktionen und Emotionen wie Unsicherheit oder Zuversicht.
+- Formulierungen müssen so verständlich sein, dass ein 14-Jähriger sie ohne Vorwissen nachvollziehen kann.
+- Antworte ausschließlich in folgender Sprache: {language}
 
 Antwortstruktur:
 
 Makro:
-(EIN prägnanter Satz über die allgemeine Marktentwicklung, Trends, Risiken oder Chancen.)
+(Genau ein klarer Satz über die wichtigste Bewegung im Gesamtmarkt und die Gründe dafür; leicht verständlich, aber faktenbasiert.)
 
 Portfolio:
-(EIN prägnanter Satz über die wichtigsten Kursbewegungen, Entwicklungen oder Stimmungsimpulse.)
+(Genau ein klarer Satz über die wichtigste wirtschaftliche Veränderung im Portfolio, verständlich erklärt und direkt mit Kurs- und Nachrichtenlage verbunden.)
 
 Gesamteinschätzung:
-(EIN prägnanter Satz mit einer klaren Richtung – Positiv, Neutral oder Negativ – und einem passenden Emoji.)
+(Ein Satz, der mit „positiv“, „neutral“ oder „negativ“ beginnt und kurz erklärt, wie die Lage wirtschaftlich wirkt, ergänzt durch 📈, ⚖️ oder 📉)

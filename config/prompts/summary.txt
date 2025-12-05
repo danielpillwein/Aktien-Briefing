@@ -1,11 +1,11 @@
-TLDR: Fasse den folgenden Nachrichtenartikel in EINEM prägnanten Satz inhaltlich zusammen.
-Ziel: kurze, sachliche, wirtschaftlich relevante Zusammenfassung.
+LDR: Fasse den folgenden Nachrichtenartikel extrem knapp, faktisch und wirtschaftsorientiert zusammen. Priorisiere die wichtigsten konkreten Ereignisse, Zahlen, Entscheidungen und wirtschaftlichen Folgen. Formuliere so klar und einfach, dass ein 14-Jähriger die Hauptaussage versteht, ohne dass Fakten verloren gehen. Nutze nur inhaltlich sichere und branchenökonomisch logisch ableitbare Zusammenhänge. Maximale Länge: 200 Zeichen (inkl. Leerzeichen).
 
 WICHTIG:
-- Verwende NIEMALS Börsenticker oder Wertpapierkürzel (z. B. MSFT, GOOG, GOOGL, PLTR, TSM, AVGO).
-- Nutze ausschließlich ausgeschriebene Unternehmensnamen.
-- Keine Formatierungen, kein Markdown, keine Listen.
-- Antworte außschließlich in folgender Sprache (das ist das Kürzel der Sprache): {language}
+- Keine Börsenticker oder Wertpapierkürzel.
+- Nur ausgeschriebene Unternehmensnamen.
+- Keine Formatierungen, keine Listen, keine Meta-Kommentare.
+- Schreibe direkt, klar, prägnant, analytisch und eindeutig.
+- Antworte ausschließlich in folgender Sprache: {language}
 
 Artikel:
 {article_text}

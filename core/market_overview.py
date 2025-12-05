@@ -6,11 +6,7 @@ from utils.prompt_loader import load_prompt
 import re
 import os
 
-# zuerst prüfen, ob die globale .env existiert
-if os.path.exists("/etc/aktienbriefing/.env"):
-    load_dotenv("/etc/aktienbriefing/.env")
-else:
-    load_dotenv()  # Fallback für lokale Tests
+load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -27,31 +23,7 @@ def strip_markdown_from_summary(text: str) -> str:
 
 
 
-def summarize_portfolio_news(news_summaries: list[str]) -> str:
-    """
-    Erstellt eine Gesamtzusammenfassung des Portfolios auf Basis der Artikel-Zusammenfassungen,
-    nutzt den Prompt aus config/prompts/market_overview.txt.
-    """
-    try:
-        text = "\n".join(news_summaries)
 
-        # Prompt aus Datei laden
-        base_prompt = load_prompt("market_overview")
-
-        # Platzhalter {summary_text} ersetzen (NUR der!)
-        prompt = base_prompt.replace("{summary_text}", text)
-
-        response = client.responses.create(
-            model="gpt-4.1-mini",
-            input=prompt,
-            max_output_tokens=250,
-        )
-
-        return response.output_text.strip()
-
-    except Exception as e:
-        logger.error(f"Fehler bei Marktübersicht: {e}")
-        return "(Fehler bei Gesamtzusammenfassung)"
 
 
 def generate_market_overview(portfolio_data, summaries):
@@ -79,7 +51,7 @@ def generate_market_overview(portfolio_data, summaries):
         response = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[
-                {"role": "system", "content": "Du bist ein erfahrener Finanzanalyst."},
+                {"role": "system", "content": load_prompt("system_analyst")},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.5,
