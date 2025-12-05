@@ -40,4 +40,4 @@ jobs:
               exit 1
             fi
             
-            echo "✅ Deployment erfolgreich abgeschlossen auf Hetzner!"
+            echo "✅ Deployment erfolgreich abgeschlossen!"
