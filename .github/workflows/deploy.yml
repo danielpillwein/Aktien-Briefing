@@ -33,7 +33,7 @@ jobs:
             sleep 5
             
             if docker compose ps aktienbriefing | grep -q "Up"; then
-              echo "✅ Container läuft!"
+              echo "✅ Container läuft jetzt!"
             else
               echo "❌ FEHLER: Container ist nicht gestartet!"
               docker compose logs aktienbriefing --tail=50
