@@ -2,19 +2,15 @@ language: "de"
 
 portfolio:
   - ticker: "GOOG"
-    name: "Alphabet Inc."
-  - ticker: "PLTR"
-    name: "Palantir Technologies Inc."
+    name: "Alphabet"
   - ticker: "MSFT"
     name: "Microsoft"
-  - ticker: "ENR"
-    name: "Siemens Energy AG"
+  - ticker: "ENR.DE"
+    name: "Siemens Energy"
+  - ticker: "NVDA"
+    name: "Nvidia"
   - ticker: "TSM"
-    name: "TSM Co. Ltd."
-  - ticker: "AVGO"
-    name: "Broadcom Inc."
-  - ticker: "HVRRF"
-    name: "Hannover Rück SE"
+    name: "TSMC (ADR)"
 
 watchlist:
   - ticker: "V"
@@ -29,6 +25,17 @@ performance:
   retries: 3
   max_concurrent_tasks: 5
   debug: false
+
+novelty:
+  enabled: true
+  lookback_days: 14
+  memory_retention_days: 90
+  semantic_threshold: 0.86
+  max_news_per_stock: 3
+  min_news_per_stock: 0
+  exact_url_dedupe: true
+  exact_title_dedupe: true
+  include_known_news_reason_in_report: true
 
 archive:
   enabled: true

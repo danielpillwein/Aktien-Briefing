@@ -20,6 +20,8 @@ SOURCES = [
 def fetch_source(url: str):
     feed = feedparser.parse(url)
     results = []
+    source_name = feed.feed.get("title", "")
+    source_url = feed.feed.get("link", "")
 
     for e in feed.entries[:5]:  # harte Begrenzung für Speed & Kosten
         content = e.get("summary", "") or e.get("description", "")
@@ -28,6 +30,9 @@ def fetch_source(url: str):
             "title": clean_title(e.title),
             "content": limit_length(remove_boilerplate(content)),
             "link": e.link,
+            "published_at": e.get("published", "") or e.get("updated", ""),
+            "source_name": source_name,
+            "source_url": source_url,
         }
         results.append(article)
 

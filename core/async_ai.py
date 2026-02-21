@@ -13,14 +13,18 @@ from utils.preprocess import clean_text
 load_dotenv()
 
 # ---------------------------------------------------------
-# OpenAI Client
+# OpenAI Client / Semaphore (loop-sicher lazy initialisiert)
 # ---------------------------------------------------------
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+_client = None
+_client_loop = None
 
 # ---------------------------------------------------------
 # Parallelitätslimit (OpenAI limitiert ≈ 5–8 gleichzeitige Requests)
 # ---------------------------------------------------------
-SEMAPHORE = asyncio.Semaphore(5)
+MAX_CONCURRENT_OPENAI_CALLS = 5
+_semaphore = None
+_semaphore_loop = None
 
 SENTIMENT_TO_EMOJI = {
     "positiv": "🟢",
@@ -29,14 +33,44 @@ SENTIMENT_TO_EMOJI = {
 }
 
 
+def _get_client() -> AsyncOpenAI:
+    """
+    Initialisiert den AsyncOpenAI-Client pro Event-Loop.
+    Verhindert Cross-Loop-Fehler bei wiederholtem asyncio.run(...)
+    (z. B. tägliche Scheduler-Läufe im selben Prozess).
+    """
+    global _client, _client_loop
+    current_loop = asyncio.get_running_loop()
+
+    if _client is None or _client_loop is not current_loop:
+        _client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        _client_loop = current_loop
+
+    return _client
+
+
+def _get_semaphore() -> asyncio.Semaphore:
+    """
+    Erstellt das Parallelitätslimit pro Event-Loop.
+    """
+    global _semaphore, _semaphore_loop
+    current_loop = asyncio.get_running_loop()
+
+    if _semaphore is None or _semaphore_loop is not current_loop:
+        _semaphore = asyncio.Semaphore(MAX_CONCURRENT_OPENAI_CALLS)
+        _semaphore_loop = current_loop
+
+    return _semaphore
+
+
 # =========================================================
 #  STEP 1: Summary generieren
 # =========================================================
 async def _get_summary(article_content: str) -> str:
     """Generiert eine Zusammenfassung des Artikels."""
     prompt = load_prompt("summary").replace("{article_text}", article_content)
-    
-    response = await client.responses.create(
+
+    response = await _get_client().responses.create(
         model="gpt-4.1-mini",
         input=prompt
     )
@@ -50,8 +84,8 @@ async def _get_summary(article_content: str) -> str:
 async def _get_sentiment(summary: str) -> str:
     """Analysiert das Sentiment einer Zusammenfassung."""
     prompt = load_prompt("sentiment").replace("{summary_text}", summary)
-    
-    response = await client.responses.create(
+
+    response = await _get_client().responses.create(
         model="gpt-4.1-mini",
         input=prompt
     )
@@ -103,5 +137,5 @@ async def process_article(article):
     damit die Pipeline nie vom OpenAI-Rate-Limiter
     in serielle Verarbeitung gezwungen wird.
     """
-    async with SEMAPHORE:
+    async with _get_semaphore():
         return await _process_internal(article)
