@@ -38,9 +38,13 @@ def save_message_cache(msg_ids: list):
 
 
 def register_message_id(message_id: int):
+    try:
+        normalized_id = int(message_id)
+    except Exception:
+        return
     msg_ids = load_message_cache()
-    if message_id not in msg_ids:
-        msg_ids.append(message_id)
+    if normalized_id not in msg_ids:
+        msg_ids.append(normalized_id)
         save_message_cache(msg_ids)
 
 
@@ -117,11 +121,13 @@ def clear_chat_before_briefing():
     if msg_ids:
         try:
             anchor = max(int(mid) for mid in msg_ids)
+            # Größerer Headroom, damit auch neuere User-Nachrichten oberhalb
+            # der letzten bekannten Bot-ID mit erfasst werden.
             stats = clear_chat_history_best_effort(
                 chat_id=str(TELEGRAM_CHAT_ID),
-                from_message_id=anchor + 120,
-                max_scan=3000,
-                stop_after_failures=180,
+                from_message_id=anchor + 600,
+                max_scan=4200,
+                stop_after_failures=700,
             )
             logger.info(
                 f"Daily Chat-Clear (best effort): gelöscht={stats['deleted']}"

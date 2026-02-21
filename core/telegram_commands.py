@@ -57,6 +57,8 @@ _MANUAL_BRIEFING_RUNNING = False
 ADD_WAIT_COMPANY, ADD_WAIT_SELECTION, ADD_WAIT_MANUAL_TICKER, ADD_WAIT_MANUAL_NAME, REMOVE_WAIT_SELECTION = range(5)
 ADD_CONFIRM_KEYWORDS = {"ja", "ok", "okay", "bestätigen", "bestaetigen", "yes", "y"}
 ADD_SELECTION_CALLBACK_PREFIX = "addsel"
+MANUAL_NAME_CALLBACK_PREFIX = "addname"
+REMOVE_SELECTION_CALLBACK_PREFIX = "remsel"
 
 
 COMMAND_MENU = [
@@ -107,6 +109,18 @@ async def _reply_and_track_html(update: Update, text: str, reply_markup=None) ->
 
 async def _reply_not_authorized(update: Update) -> None:
     await _reply_and_track_html(update, "⛔ <b>Nicht berechtigt</b>")
+
+
+async def track_incoming_message_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message or not update.effective_chat:
+        return
+    try:
+        if int(update.effective_chat.id) != ALLOWED_CHAT_ID:
+            return
+        register_message_id(int(update.message.message_id))
+    except Exception:
+        # Tracking darf den Bot-Ablauf niemals blockieren.
+        return
 
 
 def parse_add_args(args: List[str]) -> Tuple[str, str]:
@@ -211,7 +225,7 @@ def _help_text() -> str:
             "",
             "📉 <b>Portfolio entfernen</b>",
             "<code>/portfolio_remove</code>",
-            "Startet den Dialog: Nummer oder Ticker auswählen und entfernen.",
+            "Startet den Dialog: Eintrag per Buttons auswählen und entfernen.",
             "",
             "👀 <b>Watchlist hinzufügen</b>",
             "<code>/watchlist_add</code>",
@@ -219,7 +233,7 @@ def _help_text() -> str:
             "",
             "🗑️ <b>Watchlist entfernen</b>",
             "<code>/watchlist_remove</code>",
-            "Startet den Dialog: Nummer oder Ticker auswählen und entfernen.",
+            "Startet den Dialog: Eintrag per Buttons auswählen und entfernen.",
             "",
             "📋 <b>Portfolio anzeigen</b>",
             "<code>/portfolio_list</code>",
@@ -370,6 +384,7 @@ def _clear_add_context(context: ContextTypes.DEFAULT_TYPE) -> None:
 def _clear_remove_context(context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop("remove_target_list", None)
     context.user_data.pop("remove_items", None)
+    context.user_data.pop("remove_selected_index", None)
 
 
 async def _start_add_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE, list_name: str) -> None:
@@ -392,21 +407,47 @@ async def _start_add_conversation(update: Update, context: ContextTypes.DEFAULT_
     )
 
 
-def _format_remove_prompt(items: list, title: str, emoji: str) -> str:
+def _remove_selection_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("⬆️ Hoch", callback_data=f"{REMOVE_SELECTION_CALLBACK_PREFIX}:up"),
+                InlineKeyboardButton("⬇️ Runter", callback_data=f"{REMOVE_SELECTION_CALLBACK_PREFIX}:down"),
+            ],
+            [
+                InlineKeyboardButton("✅ Auswählen", callback_data=f"{REMOVE_SELECTION_CALLBACK_PREFIX}:pick"),
+            ],
+            [InlineKeyboardButton("🛑 Abbrechen", callback_data=f"{REMOVE_SELECTION_CALLBACK_PREFIX}:cancel")],
+        ]
+    )
+
+
+def _manual_name_choice_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("✅ Hinzufügen", callback_data=f"{MANUAL_NAME_CALLBACK_PREFIX}:use"),
+                InlineKeyboardButton("✏️ Namen selbst festlegen", callback_data=f"{MANUAL_NAME_CALLBACK_PREFIX}:own"),
+            ],
+            [InlineKeyboardButton("🛑 Abbrechen", callback_data=f"{MANUAL_NAME_CALLBACK_PREFIX}:cancel")],
+        ]
+    )
+
+
+def _format_remove_prompt(items: list, title: str, emoji: str, selected_index: int) -> str:
+    selected_index = max(0, min(selected_index, max(0, len(items) - 1)))
     lines = [
-        f"🗑️ <b>{escape(title)} bearbeiten</b>",
+        f"🗑️ <b>{escape(title)} entfernen</b>",
         f"{emoji} <b>{escape(title)} (Ticker - Name)</b>",
+        "<i>Eintrag mit Buttons auswählen</i>",
+        "",
     ]
     for idx, item in enumerate(items, start=1):
         ticker = escape(str(item.get("ticker", "")))
         name = escape(str(item.get("name", "")))
-        lines.append(f"{idx}. {ticker} - {name}")
-    lines.extend(
-        [
-            "",
-            "Antworte mit der <b>Nummer</b> oder mit dem <b>Ticker</b>, den du entfernen möchtest.",
-        ]
-    )
+        marker = "👉" if (idx - 1) == selected_index else "  "
+        lines.append(f"{marker} {_rank_emoji(idx)} <b>{idx}. {ticker}</b> - {name}")
+    lines.extend(["", "Steuerung über Buttons: <b>Hoch</b>, <b>Runter</b>, <b>Auswählen</b>."])
     return "\n".join(lines)
 
 
@@ -424,27 +465,13 @@ async def _start_remove_conversation(update: Update, context: ContextTypes.DEFAU
 
     context.user_data["remove_target_list"] = list_name
     context.user_data["remove_items"] = items
-    await _reply_and_track_html(update, _format_remove_prompt(items, title, emoji))
+    context.user_data["remove_selected_index"] = 0
+    await _reply_and_track_html(
+        update,
+        _format_remove_prompt(items, title, emoji, selected_index=0),
+        reply_markup=_remove_selection_keyboard(),
+    )
     return True
-
-
-def _find_remove_item(items: list, text: str):
-    value = (text or "").strip()
-    if not value:
-        return None
-
-    if value.isdigit():
-        idx = int(value)
-        if 1 <= idx <= len(items):
-            return items[idx - 1]
-        return None
-
-    ticker = normalize_ticker(value.split()[0])
-    for item in items:
-        item_ticker = normalize_ticker(str(item.get("ticker", "")))
-        if item_ticker == ticker:
-            return item
-    return None
 
 
 def _rank_emoji(position: int) -> str:
@@ -521,6 +548,7 @@ def _wants_manual_flow(text: str) -> bool:
 async def _finalize_add_and_show_list(update: Update, context: ContextTypes.DEFAULT_TYPE, list_name: str, ticker: str, name: str) -> int:
     try:
         result = add_stock(list_name=list_name, ticker=ticker, name=name)
+        await _reply_and_track_html(update, _format_add_success(result))
         settings = load_settings_file()
         title = "Portfolio" if result["list_name"] == "portfolio" else "Watchlist"
         emoji = "📈" if result["list_name"] == "portfolio" else "👀"
@@ -686,10 +714,53 @@ async def add_receive_manual_ticker(update: Update, context: ContextTypes.DEFAUL
                 "✅ <b>Ticker geprüft</b>",
                 f"Ticker: <b>{escape(ticker)}</b>",
                 f"Vorschlag: <b>{escape(suggested_name)}</b>",
-                "Sende jetzt den gewünschten <b>Namen</b> oder antworte mit <code>ja</code>, um den Vorschlag zu übernehmen.",
+                "Wähle: <b>Hinzufügen</b> (mit Vorschlag) oder <b>Namen selbst festlegen</b>.",
             ]
         ),
+        reply_markup=_manual_name_choice_keyboard(),
     )
+    return ADD_WAIT_MANUAL_NAME
+
+
+async def add_receive_manual_name_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    if query:
+        await query.answer()
+
+    if not _is_authorized(update):
+        await _reply_not_authorized(update)
+        return ConversationHandler.END
+    if not query:
+        return ADD_WAIT_MANUAL_NAME
+
+    list_name = context.user_data.get("add_target_list", "")
+    ticker = context.user_data.get("add_ticker", "")
+    suggested_name = context.user_data.get("add_name_suggestion", ticker)
+    if not list_name or not ticker:
+        _clear_add_context(context)
+        await query.edit_message_text(
+            "❌ <b>Dialogstatus verloren</b>\nBitte starte erneut mit /portfolio_add oder /watchlist_add.",
+            parse_mode=ParseMode.HTML,
+        )
+        return ConversationHandler.END
+
+    action = (query.data or "").split(":", 1)[-1]
+
+    if action == "cancel":
+        _clear_add_context(context)
+        await query.edit_message_text("🛑 <b>Hinzufügen abgebrochen</b>", parse_mode=ParseMode.HTML)
+        return ConversationHandler.END
+
+    if action == "own":
+        await query.edit_message_reply_markup(reply_markup=None)
+        await _reply_and_track_html(update, "✏️ Bitte sende jetzt den gewünschten <b>Namen</b> als Text.")
+        return ADD_WAIT_MANUAL_NAME
+
+    if action == "use":
+        await query.edit_message_reply_markup(reply_markup=None)
+        return await _finalize_add_and_show_list(update, context, list_name, ticker, suggested_name)
+
+    await query.answer("Unbekannte Aktion", show_alert=False)
     return ADD_WAIT_MANUAL_NAME
 
 
@@ -723,34 +794,54 @@ async def add_receive_manual_name(update: Update, context: ContextTypes.DEFAULT_
     return await _finalize_add_and_show_list(update, context, list_name, ticker, name)
 
 
-async def remove_receive_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def remove_receive_selection_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    if query:
+        await query.answer()
+
     if not _is_authorized(update):
         await _reply_not_authorized(update)
         return ConversationHandler.END
-    if not update.message or not update.message.text:
-        await _reply_and_track_html(update, _format_validation_error("Bitte sende eine Nummer oder einen Ticker."))
+    if not query:
         return REMOVE_WAIT_SELECTION
 
     list_name = context.user_data.get("remove_target_list", "")
     items = context.user_data.get("remove_items", [])
+    selected_index = int(context.user_data.get("remove_selected_index", 0))
+    selected_index = max(0, min(selected_index, max(0, len(items) - 1)))
     if not list_name or not isinstance(items, list) or not items:
         _clear_remove_context(context)
-        await _reply_and_track_html(
-            update,
+        await query.edit_message_text(
             "❌ <b>Dialogstatus verloren</b>\nBitte starte erneut mit /portfolio_remove oder /watchlist_remove.",
+            parse_mode=ParseMode.HTML,
         )
         return ConversationHandler.END
 
-    selected = _find_remove_item(items, update.message.text)
-    if not selected:
-        await _reply_and_track_html(
-            update,
-            _format_validation_error(
-                f"Nicht gefunden. Bitte sende eine Nummer von 1 bis {len(items)} oder einen exakten Ticker."
-            ),
+    action = (query.data or "").split(":", 1)[-1]
+
+    if action in {"up", "down"}:
+        selected_index = _move_selection(selected_index, action, len(items))
+        context.user_data["remove_selected_index"] = selected_index
+        title = "Portfolio" if list_name == "portfolio" else "Watchlist"
+        emoji = "📈" if list_name == "portfolio" else "👀"
+        await query.edit_message_text(
+            _format_remove_prompt(items, title, emoji, selected_index),
+            parse_mode=ParseMode.HTML,
+            reply_markup=_remove_selection_keyboard(),
         )
         return REMOVE_WAIT_SELECTION
 
+    if action == "cancel":
+        _clear_remove_context(context)
+        await query.edit_message_text("🛑 <b>Entfernen abgebrochen</b>", parse_mode=ParseMode.HTML)
+        return ConversationHandler.END
+
+    if action != "pick":
+        await query.answer("Unbekannte Aktion", show_alert=False)
+        return REMOVE_WAIT_SELECTION
+
+    await query.edit_message_reply_markup(reply_markup=None)
+    selected = items[selected_index]
     ticker = normalize_ticker(str(selected.get("ticker", "")))
     if not ticker:
         await _reply_and_track_html(update, _format_validation_error("Der gewählte Eintrag hat keinen gültigen Ticker."))
@@ -771,6 +862,17 @@ async def remove_receive_selection(update: Update, context: ContextTypes.DEFAULT
         _clear_remove_context(context)
 
     return ConversationHandler.END
+
+
+async def remove_receive_selection_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not _is_authorized(update):
+        await _reply_not_authorized(update)
+        return ConversationHandler.END
+    await _reply_and_track_html(
+        update,
+        "👆 <b>Bitte nutze die Buttons</b> unter der Entfernen-Liste.",
+    )
+    return REMOVE_WAIT_SELECTION
 
 
 async def add_cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -923,6 +1025,7 @@ async def _post_init(application: Application) -> None:
 
 def build_command_application() -> Application:
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).post_init(_post_init).build()
+    app.add_handler(MessageHandler(filters.ALL, track_incoming_message_id), group=-1)
     app.add_handler(CommandHandler("help", help_command))
     add_flow_handler = ConversationHandler(
         entry_points=[
@@ -939,7 +1042,13 @@ def build_command_application() -> Application:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_selection_text),
             ],
             ADD_WAIT_MANUAL_TICKER: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_manual_ticker)],
-            ADD_WAIT_MANUAL_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_manual_name)],
+            ADD_WAIT_MANUAL_NAME: [
+                CallbackQueryHandler(
+                    add_receive_manual_name_button,
+                    pattern=rf"^{MANUAL_NAME_CALLBACK_PREFIX}:",
+                ),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_manual_name),
+            ],
         },
         fallbacks=[CommandHandler("cancel", add_cancel_command)],
         allow_reentry=True,
@@ -951,7 +1060,13 @@ def build_command_application() -> Application:
             CommandHandler("watchlist_remove", watchlist_remove_command),
         ],
         states={
-            REMOVE_WAIT_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, remove_receive_selection)],
+            REMOVE_WAIT_SELECTION: [
+                CallbackQueryHandler(
+                    remove_receive_selection_button,
+                    pattern=rf"^{REMOVE_SELECTION_CALLBACK_PREFIX}:",
+                ),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, remove_receive_selection_text),
+            ],
         },
         fallbacks=[CommandHandler("cancel", add_cancel_command)],
         allow_reentry=True,
