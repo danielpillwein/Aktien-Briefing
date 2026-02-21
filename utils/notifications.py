@@ -124,7 +124,7 @@ def clear_chat_before_briefing():
                 stop_after_failures=180,
             )
             logger.info(
-                f"Daily Chat-Clear (best effort): gelöscht={stats['deleted']} fehlgeschlagen={stats['failed']}"
+                f"Daily Chat-Clear (best effort): gelöscht={stats['deleted']}"
             )
         except Exception as e:
             logger.error(f"Fehler bei Daily Chat-Clear: {e}")

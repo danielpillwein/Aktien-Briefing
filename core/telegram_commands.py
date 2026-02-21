@@ -7,11 +7,12 @@ from typing import List, Tuple
 
 from dotenv import load_dotenv
 from loguru import logger
-from telegram import BotCommand, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
     ApplicationBuilder,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     ConversationHandler,
@@ -53,8 +54,9 @@ def _parse_allowed_chat_id(chat_id_raw: str) -> int:
 ALLOWED_CHAT_ID = _parse_allowed_chat_id(TELEGRAM_CHAT_ID_RAW)
 _MANUAL_BRIEFING_LOCK = threading.Lock()
 _MANUAL_BRIEFING_RUNNING = False
-ADD_WAIT_COMPANY, ADD_WAIT_SELECTION, ADD_WAIT_MANUAL_TICKER, ADD_WAIT_MANUAL_NAME = range(4)
+ADD_WAIT_COMPANY, ADD_WAIT_SELECTION, ADD_WAIT_MANUAL_TICKER, ADD_WAIT_MANUAL_NAME, REMOVE_WAIT_SELECTION = range(5)
 ADD_CONFIRM_KEYWORDS = {"ja", "ok", "okay", "bestätigen", "bestaetigen", "yes", "y"}
+ADD_SELECTION_CALLBACK_PREFIX = "addsel"
 
 
 COMMAND_MENU = [
@@ -77,18 +79,28 @@ def _is_authorized(update: Update) -> bool:
     return bool(chat and int(chat.id) == ALLOWED_CHAT_ID)
 
 
+def _reply_target_message(update: Update):
+    if update.message:
+        return update.message
+    if update.callback_query and update.callback_query.message:
+        return update.callback_query.message
+    return None
+
+
 async def _reply_and_track(update: Update, text: str) -> None:
-    if not update.message:
+    target = _reply_target_message(update)
+    if not target:
         return
-    msg = await update.message.reply_text(text)
+    msg = await target.reply_text(text)
     if msg:
         register_message_id(msg.message_id)
 
 
-async def _reply_and_track_html(update: Update, text: str) -> None:
-    if not update.message:
+async def _reply_and_track_html(update: Update, text: str, reply_markup=None) -> None:
+    target = _reply_target_message(update)
+    if not target:
         return
-    msg = await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    msg = await target.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
     if msg:
         register_message_id(msg.message_id)
 
@@ -195,19 +207,19 @@ def _help_text() -> str:
             "",
             "📈 <b>Portfolio hinzufügen</b>",
             "<code>/portfolio_add</code>",
-            "Startet den Dialog: Unternehmen eingeben, Vorschlag auswählen oder manuell hinzufügen.",
+            "Startet den Dialog: Unternehmen eingeben, Vorschlag per Buttons wählen oder manuell hinzufügen.",
             "",
             "📉 <b>Portfolio entfernen</b>",
-            "<code>/portfolio_remove &lt;TICKER&gt;</code>",
-            "Entfernt eine Aktie aus dem Portfolio.",
+            "<code>/portfolio_remove</code>",
+            "Startet den Dialog: Nummer oder Ticker auswählen und entfernen.",
             "",
             "👀 <b>Watchlist hinzufügen</b>",
             "<code>/watchlist_add</code>",
-            "Startet den Dialog: Unternehmen eingeben, Vorschlag auswählen oder manuell hinzufügen.",
+            "Startet den Dialog: Unternehmen eingeben, Vorschlag per Buttons wählen oder manuell hinzufügen.",
             "",
             "🗑️ <b>Watchlist entfernen</b>",
-            "<code>/watchlist_remove &lt;TICKER&gt;</code>",
-            "Entfernt eine Aktie aus der Watchlist.",
+            "<code>/watchlist_remove</code>",
+            "Startet den Dialog: Nummer oder Ticker auswählen und entfernen.",
             "",
             "📋 <b>Portfolio anzeigen</b>",
             "<code>/portfolio_list</code>",
@@ -326,20 +338,38 @@ async def watchlist_add_command(update: Update, context: ContextTypes.DEFAULT_TY
     return ADD_WAIT_COMPANY
 
 
-async def portfolio_remove_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _handle_remove(update, context, "portfolio", "/portfolio_remove <TICKER>")
+async def portfolio_remove_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not _is_authorized(update):
+        await _reply_not_authorized(update)
+        return ConversationHandler.END
+    started = await _start_remove_conversation(update, context, "portfolio")
+    if not started:
+        return ConversationHandler.END
+    return REMOVE_WAIT_SELECTION
 
 
-async def watchlist_remove_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _handle_remove(update, context, "watchlist", "/watchlist_remove <TICKER>")
+async def watchlist_remove_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not _is_authorized(update):
+        await _reply_not_authorized(update)
+        return ConversationHandler.END
+    started = await _start_remove_conversation(update, context, "watchlist")
+    if not started:
+        return ConversationHandler.END
+    return REMOVE_WAIT_SELECTION
 
 
 def _clear_add_context(context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop("add_target_list", None)
     context.user_data.pop("add_company_query", None)
     context.user_data.pop("add_candidates", None)
+    context.user_data.pop("add_selected_index", None)
     context.user_data.pop("add_ticker", None)
     context.user_data.pop("add_name_suggestion", None)
+
+
+def _clear_remove_context(context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data.pop("remove_target_list", None)
+    context.user_data.pop("remove_items", None)
 
 
 async def _start_add_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE, list_name: str) -> None:
@@ -362,28 +392,121 @@ async def _start_add_conversation(update: Update, context: ContextTypes.DEFAULT_
     )
 
 
-def _format_candidate_options(candidates: list) -> str:
-    lines = ["🔎 <b>Meintest du eine dieser Aktien?</b>"]
+def _format_remove_prompt(items: list, title: str, emoji: str) -> str:
+    lines = [
+        f"🗑️ <b>{escape(title)} bearbeiten</b>",
+        f"{emoji} <b>{escape(title)} (Ticker - Name)</b>",
+    ]
+    for idx, item in enumerate(items, start=1):
+        ticker = escape(str(item.get("ticker", "")))
+        name = escape(str(item.get("name", "")))
+        lines.append(f"{idx}. {ticker} - {name}")
+    lines.extend(
+        [
+            "",
+            "Antworte mit der <b>Nummer</b> oder mit dem <b>Ticker</b>, den du entfernen möchtest.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+async def _start_remove_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE, list_name: str) -> bool:
+    _clear_remove_context(context)
+    settings = load_settings_file()
+    raw_items = settings.get(list_name, [])
+    items = [x for x in raw_items if isinstance(x, dict)]
+
+    title = "Portfolio" if list_name == "portfolio" else "Watchlist"
+    emoji = "📈" if list_name == "portfolio" else "👀"
+    if not items:
+        await _reply_and_track_html(update, f"🗑️ <b>{title} entfernen</b>\nKeine Einträge vorhanden.")
+        return False
+
+    context.user_data["remove_target_list"] = list_name
+    context.user_data["remove_items"] = items
+    await _reply_and_track_html(update, _format_remove_prompt(items, title, emoji))
+    return True
+
+
+def _find_remove_item(items: list, text: str):
+    value = (text or "").strip()
+    if not value:
+        return None
+
+    if value.isdigit():
+        idx = int(value)
+        if 1 <= idx <= len(items):
+            return items[idx - 1]
+        return None
+
+    ticker = normalize_ticker(value.split()[0])
+    for item in items:
+        item_ticker = normalize_ticker(str(item.get("ticker", "")))
+        if item_ticker == ticker:
+            return item
+    return None
+
+
+def _rank_emoji(position: int) -> str:
+    if position == 1:
+        return "🥇"
+    if position == 2:
+        return "🥈"
+    if position == 3:
+        return "🥉"
+    return "▫️"
+
+
+def _add_selection_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("⬆️ Hoch", callback_data=f"{ADD_SELECTION_CALLBACK_PREFIX}:up"),
+                InlineKeyboardButton("⬇️ Runter", callback_data=f"{ADD_SELECTION_CALLBACK_PREFIX}:down"),
+            ],
+            [
+                InlineKeyboardButton("✅ Auswählen", callback_data=f"{ADD_SELECTION_CALLBACK_PREFIX}:pick"),
+                InlineKeyboardButton("✍️ Manuell", callback_data=f"{ADD_SELECTION_CALLBACK_PREFIX}:manual"),
+            ],
+            [InlineKeyboardButton("🛑 Abbrechen", callback_data=f"{ADD_SELECTION_CALLBACK_PREFIX}:cancel")],
+        ]
+    )
+
+
+def _format_candidate_options(company_query: str, candidates: list, selected_index: int) -> str:
+    selected_index = max(0, min(selected_index, max(0, len(candidates) - 1)))
+    lines = [
+        f"🔎 <b>Aktienvorschläge für „{escape(company_query)}“</b>",
+        "<i>Nach Relevanz sortiert</i>",
+        "",
+    ]
     for idx, c in enumerate(candidates, start=1):
         symbol = escape(str(c.get("symbol", "")))
         name = escape(str(c.get("name", "")))
         exchange = escape(str(c.get("exchange", "")))
-        suffix = f" ({exchange})" if exchange else ""
-        lines.append(f"{idx}. {symbol} - {name}{suffix}")
-    lines.append("")
-    lines.append("Antworte mit der <b>Nummer</b> (z. B. <code>1</code>)")
-    lines.append("oder mit <code>manuell</code> bzw. <code>ganz andere</code>, wenn es eine andere Aktie ist.")
+        qtype = escape(str(c.get("type", "")))
+        marker = "👉" if (idx - 1) == selected_index else "  "
+        lines.append(f"{marker} {_rank_emoji(idx)} <b>{idx}. {symbol}</b> - {name}")
+        meta_parts = []
+        if exchange:
+            meta_parts.append(f"Börse: {exchange}")
+        if qtype:
+            meta_parts.append(f"Typ: {qtype}")
+        if meta_parts:
+            lines.append(f"<i>{' | '.join(meta_parts)}</i>")
+        lines.append("")
+    lines.append("Steuerung über Buttons: <b>Hoch</b>, <b>Runter</b>, <b>Auswählen</b>.")
     return "\n".join(lines)
 
 
-def _parse_selection(text: str, max_value: int) -> int:
-    value = (text or "").strip()
-    if not value.isdigit():
-        return -1
-    idx = int(value)
-    if idx < 1 or idx > max_value:
-        return -1
-    return idx
+def _move_selection(current_index: int, direction: str, total: int) -> int:
+    if total <= 0:
+        return 0
+    if direction == "up":
+        return (current_index - 1) % total
+    if direction == "down":
+        return (current_index + 1) % total
+    return current_index
 
 
 def _wants_manual_flow(text: str) -> bool:
@@ -446,45 +569,91 @@ async def add_receive_company(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     context.user_data["add_company_query"] = text
     context.user_data["add_candidates"] = candidates
-    await _reply_and_track_html(update, _format_candidate_options(candidates))
+    context.user_data["add_selected_index"] = 0
+    await _reply_and_track_html(
+        update,
+        _format_candidate_options(text, candidates, selected_index=0),
+        reply_markup=_add_selection_keyboard(),
+    )
     return ADD_WAIT_SELECTION
 
 
-async def add_receive_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def add_receive_selection_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    if query:
+        await query.answer()
+
     if not _is_authorized(update):
         await _reply_not_authorized(update)
         return ConversationHandler.END
-    if not update.message or not update.message.text:
-        await _reply_and_track_html(update, _format_validation_error("Bitte sende eine Nummer oder 'manuell/ganz andere'."))
+
+    if not query:
         return ADD_WAIT_SELECTION
 
     list_name = context.user_data.get("add_target_list", "")
+    company_query = context.user_data.get("add_company_query", "")
     candidates = context.user_data.get("add_candidates", [])
     if not list_name or not isinstance(candidates, list) or not candidates:
         _clear_add_context(context)
-        await _reply_and_track_html(update, "❌ <b>Dialogstatus verloren</b>\nBitte starte erneut mit /portfolio_add oder /watchlist_add.")
+        await query.edit_message_text(
+            "❌ <b>Dialogstatus verloren</b>\nBitte starte erneut mit /portfolio_add oder /watchlist_add.",
+            parse_mode=ParseMode.HTML,
+        )
         return ConversationHandler.END
 
-    text = update.message.text.strip()
-    if _wants_manual_flow(text):
+    selected_index = int(context.user_data.get("add_selected_index", 0))
+    selected_index = max(0, min(selected_index, len(candidates) - 1))
+    action = (query.data or "").split(":", 1)[-1]
+
+    if action in {"up", "down"}:
+        selected_index = _move_selection(selected_index, action, len(candidates))
+        context.user_data["add_selected_index"] = selected_index
+        await query.edit_message_text(
+            _format_candidate_options(company_query, candidates, selected_index),
+            parse_mode=ParseMode.HTML,
+            reply_markup=_add_selection_keyboard(),
+        )
+        return ADD_WAIT_SELECTION
+
+    if action == "manual":
+        context.user_data["add_selected_index"] = selected_index
+        await query.edit_message_reply_markup(reply_markup=None)
         await _reply_and_track_html(
             update,
             "✍️ <b>Manuelles Hinzufügen</b>\nBitte sende jetzt den <b>Ticker</b> (z. B. <code>MSFT</code>).",
         )
         return ADD_WAIT_MANUAL_TICKER
 
-    selected_idx = _parse_selection(text, len(candidates))
-    if selected_idx == -1:
-        await _reply_and_track_html(
-            update,
-            f"⚠️ <b>Ungültige Auswahl</b>\nBitte sende eine Nummer von <code>1</code> bis <code>{len(candidates)}</code> oder <code>manuell</code>/<code>ganz andere</code>.",
-        )
+    if action == "cancel":
+        _clear_add_context(context)
+        await query.edit_message_text("🛑 <b>Hinzufügen abgebrochen</b>", parse_mode=ParseMode.HTML)
+        return ConversationHandler.END
+
+    if action != "pick":
+        await query.answer("Unbekannte Aktion", show_alert=False)
         return ADD_WAIT_SELECTION
 
-    selected = candidates[selected_idx - 1]
+    await query.edit_message_reply_markup(reply_markup=None)
+    selected = candidates[selected_index]
     ticker = normalize_ticker(str(selected.get("symbol", "")))
     name = str(selected.get("name", "")).strip() or ticker
     return await _finalize_add_and_show_list(update, context, list_name, ticker, name)
+
+
+async def add_receive_selection_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not _is_authorized(update):
+        await _reply_not_authorized(update)
+        return ConversationHandler.END
+    await _reply_and_track_html(
+        update,
+        "\n".join(
+            [
+                "👆 <b>Bitte nutze die Buttons</b> unter der Vorschlagsliste.",
+                "Alternativ kannst du dort auf <b>Manuell</b> tippen.",
+            ]
+        )
+    )
+    return ADD_WAIT_SELECTION
 
 
 async def add_receive_manual_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -554,12 +723,63 @@ async def add_receive_manual_name(update: Update, context: ContextTypes.DEFAULT_
     return await _finalize_add_and_show_list(update, context, list_name, ticker, name)
 
 
+async def remove_receive_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not _is_authorized(update):
+        await _reply_not_authorized(update)
+        return ConversationHandler.END
+    if not update.message or not update.message.text:
+        await _reply_and_track_html(update, _format_validation_error("Bitte sende eine Nummer oder einen Ticker."))
+        return REMOVE_WAIT_SELECTION
+
+    list_name = context.user_data.get("remove_target_list", "")
+    items = context.user_data.get("remove_items", [])
+    if not list_name or not isinstance(items, list) or not items:
+        _clear_remove_context(context)
+        await _reply_and_track_html(
+            update,
+            "❌ <b>Dialogstatus verloren</b>\nBitte starte erneut mit /portfolio_remove oder /watchlist_remove.",
+        )
+        return ConversationHandler.END
+
+    selected = _find_remove_item(items, update.message.text)
+    if not selected:
+        await _reply_and_track_html(
+            update,
+            _format_validation_error(
+                f"Nicht gefunden. Bitte sende eine Nummer von 1 bis {len(items)} oder einen exakten Ticker."
+            ),
+        )
+        return REMOVE_WAIT_SELECTION
+
+    ticker = normalize_ticker(str(selected.get("ticker", "")))
+    if not ticker:
+        await _reply_and_track_html(update, _format_validation_error("Der gewählte Eintrag hat keinen gültigen Ticker."))
+        return REMOVE_WAIT_SELECTION
+
+    try:
+        result = remove_stock(list_name=list_name, ticker=ticker)
+        settings = load_settings_file()
+        title = "Portfolio" if result["list_name"] == "portfolio" else "Watchlist"
+        emoji = "📈" if result["list_name"] == "portfolio" else "👀"
+        await _reply_and_track_html(update, _format_list(settings.get(result["list_name"], []), title, emoji))
+    except KeyError as exc:
+        await _reply_and_track_html(update, _format_validation_error(str(exc)))
+    except Exception as exc:
+        logger.exception(f"Fehler bei {list_name}_remove: {exc}")
+        await _reply_and_track_html(update, _format_storage_error())
+    finally:
+        _clear_remove_context(context)
+
+    return ConversationHandler.END
+
+
 async def add_cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not _is_authorized(update):
         await _reply_not_authorized(update)
         return ConversationHandler.END
     _clear_add_context(context)
-    await _reply_and_track_html(update, "🛑 <b>Hinzufügen abgebrochen</b>")
+    _clear_remove_context(context)
+    await _reply_and_track_html(update, "🛑 <b>Vorgang abgebrochen</b>")
     return ConversationHandler.END
 
 
@@ -693,7 +913,7 @@ async def clear_chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
     await _reply_and_track(
         update,
-        f"🧹 Chat bereinigt (best effort). Gelöscht: {result['deleted']}, Fehlgeschlagen: {result['failed']}",
+        f"🧹 Chat bereinigt (best effort). Gelöscht: {result['deleted']}",
     )
 
 
@@ -711,7 +931,13 @@ def build_command_application() -> Application:
         ],
         states={
             ADD_WAIT_COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_company)],
-            ADD_WAIT_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_selection)],
+            ADD_WAIT_SELECTION: [
+                CallbackQueryHandler(
+                    add_receive_selection_button,
+                    pattern=rf"^{ADD_SELECTION_CALLBACK_PREFIX}:",
+                ),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_selection_text),
+            ],
             ADD_WAIT_MANUAL_TICKER: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_manual_ticker)],
             ADD_WAIT_MANUAL_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_manual_name)],
         },
@@ -719,8 +945,18 @@ def build_command_application() -> Application:
         allow_reentry=True,
     )
     app.add_handler(add_flow_handler)
-    app.add_handler(CommandHandler("portfolio_remove", portfolio_remove_command))
-    app.add_handler(CommandHandler("watchlist_remove", watchlist_remove_command))
+    remove_flow_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler("portfolio_remove", portfolio_remove_command),
+            CommandHandler("watchlist_remove", watchlist_remove_command),
+        ],
+        states={
+            REMOVE_WAIT_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, remove_receive_selection)],
+        },
+        fallbacks=[CommandHandler("cancel", add_cancel_command)],
+        allow_reentry=True,
+    )
+    app.add_handler(remove_flow_handler)
     app.add_handler(CommandHandler("portfolio_list", portfolio_list_command))
     app.add_handler(CommandHandler("watchlist_list", watchlist_list_command))
     app.add_handler(CommandHandler("briefing_now", briefing_now_command))

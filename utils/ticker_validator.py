@@ -4,6 +4,7 @@ from typing import Dict, List, Tuple
 import yfinance as yf
 
 TICKER_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,14}$")
+NON_ALNUM_PATTERN = re.compile(r"[^a-z0-9]+")
 
 
 def normalize_ticker(ticker: str) -> str:
@@ -79,6 +80,60 @@ def _normalize_quote(quote: Dict) -> Dict:
     }
 
 
+def _compact(value: str) -> str:
+    return NON_ALNUM_PATTERN.sub("", (value or "").lower())
+
+
+def _score_candidate(item: Dict, query: str) -> int:
+    q = (query or "").strip().lower()
+    q_compact = _compact(q)
+    q_tokens = [t for t in re.split(r"\s+", q) if t]
+
+    symbol = str(item.get("symbol") or "").strip()
+    name = str(item.get("name") or "").strip()
+    qtype = str(item.get("type") or "").upper()
+    exchange = str(item.get("exchange") or "").upper()
+
+    symbol_l = symbol.lower()
+    name_l = name.lower()
+    symbol_compact = _compact(symbol_l)
+    name_compact = _compact(name_l)
+
+    score = 0
+
+    if qtype == "EQUITY":
+        score += 140
+    elif qtype in {"ETF", "FUND"}:
+        score += 30
+
+    if q_compact and symbol_compact == q_compact:
+        score += 260
+    if q_compact and name_compact == q_compact:
+        score += 220
+    if q_compact and symbol_compact.startswith(q_compact):
+        score += 180
+    if q_compact and name_compact.startswith(q_compact):
+        score += 140
+    if q_compact and q_compact in symbol_compact:
+        score += 100
+    if q_compact and q_compact in name_compact:
+        score += 80
+
+    for token in q_tokens:
+        token_compact = _compact(token)
+        if len(token_compact) < 2:
+            continue
+        if token_compact in symbol_compact:
+            score += 36
+        if token_compact in name_compact:
+            score += 22
+
+    if exchange in {"NASDAQ", "NMS", "NYSE", "XETRA", "FWB"}:
+        score += 12
+
+    return score
+
+
 def search_ticker_candidates(query: str, limit: int = 5) -> List[Dict]:
     q = (query or "").strip()
     if not q:
@@ -86,8 +141,9 @@ def search_ticker_candidates(query: str, limit: int = 5) -> List[Dict]:
 
     raw_quotes = []
     try:
+        max_results = max(limit * 5, 25)
         try:
-            search_obj = yf.Search(query=q, max_results=max(limit * 2, 10))
+            search_obj = yf.Search(query=q, max_results=max_results)
         except TypeError:
             search_obj = yf.Search(q)
 
@@ -111,6 +167,13 @@ def search_ticker_candidates(query: str, limit: int = 5) -> List[Dict]:
         seen.add(symbol)
         normalized.append(item)
 
-    equities = [x for x in normalized if x.get("type") == "EQUITY"]
-    ranked = equities if equities else normalized
+    ranked = sorted(
+        normalized,
+        key=lambda item: (
+            _score_candidate(item, q),
+            1 if item.get("type") == "EQUITY" else 0,
+            -len(str(item.get("symbol", ""))),
+        ),
+        reverse=True,
+    )
     return ranked[:limit]
