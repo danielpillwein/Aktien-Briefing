@@ -3,6 +3,7 @@ import json
 import re
 import requests
 import time
+from typing import Dict, Optional
 from loguru import logger
 from dotenv import load_dotenv
 from pathlib import Path
@@ -26,7 +27,7 @@ def load_message_cache() -> list:
     if MESSAGE_CACHE_FILE.exists():
         try:
             return json.loads(MESSAGE_CACHE_FILE.read_text(encoding="utf-8"))
-        except:
+        except Exception:
             return []
     return []
 
@@ -36,24 +37,98 @@ def save_message_cache(msg_ids: list):
     MESSAGE_CACHE_FILE.write_text(json.dumps(msg_ids), encoding="utf-8")
 
 
-def clear_old_messages():
+def register_message_id(message_id: int):
+    msg_ids = load_message_cache()
+    if message_id not in msg_ids:
+        msg_ids.append(message_id)
+        save_message_cache(msg_ids)
+
+
+def _delete_message(chat_id: str, message_id: int) -> bool:
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteMessage"
+    try:
+        resp = requests.post(
+            url,
+            data={"chat_id": chat_id, "message_id": message_id},
+            timeout=5,
+        )
+        if resp.ok:
+            return True
+        logger.debug(f"Telegram deleteMessage fehlgeschlagen für {message_id}: {resp.text}")
+        return False
+    except Exception as e:
+        logger.error(f"Fehler beim Löschen von Nachricht {message_id}: {e}")
+        return False
+
+
+def clear_old_messages(chat_id: Optional[str] = None):
     msg_ids = load_message_cache()
     if not msg_ids:
         return
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteMessage"
+    target_chat_id = str(chat_id or TELEGRAM_CHAT_ID)
 
     for mid in msg_ids:
-        try:
-            requests.post(url, data={
-                "chat_id": TELEGRAM_CHAT_ID,
-                "message_id": mid
-            }, timeout=5)
-            time.sleep(0.05)
-        except Exception as e:
-            logger.error(f"Fehler beim Löschen von Nachricht {mid}: {e}")
+        _delete_message(target_chat_id, int(mid))
+        time.sleep(0.03)
 
     save_message_cache([])
+
+
+def clear_chat_history_best_effort(
+    chat_id: str,
+    from_message_id: int,
+    max_scan: int = 5000,
+    stop_after_failures: int = 60,
+) -> Dict[str, int]:
+    """
+    Versucht, Nachrichten ab from_message_id rückwärts zu löschen.
+    Telegram-Berechtigungen/Altersgrenzen werden respektiert (best effort).
+    """
+    deleted = 0
+    failed = 0
+    consecutive_failures = 0
+
+    low = max(1, from_message_id - max_scan + 1)
+    for message_id in range(from_message_id, low - 1, -1):
+        ok = _delete_message(chat_id, message_id)
+        if ok:
+            deleted += 1
+            consecutive_failures = 0
+        else:
+            failed += 1
+            consecutive_failures += 1
+            if consecutive_failures >= stop_after_failures:
+                break
+        time.sleep(0.02)
+
+    if deleted > 0:
+        save_message_cache([])
+
+    return {"deleted": deleted, "failed": failed}
+
+
+def clear_chat_before_briefing():
+    """
+    Führt vor dem Daily-Briefing eine aggressive, aber begrenzte Bereinigung aus.
+    Fallback bleibt das Löschen aller gecachten Bot-Nachrichten.
+    """
+    msg_ids = load_message_cache()
+    if msg_ids:
+        try:
+            anchor = max(int(mid) for mid in msg_ids)
+            stats = clear_chat_history_best_effort(
+                chat_id=str(TELEGRAM_CHAT_ID),
+                from_message_id=anchor + 120,
+                max_scan=3000,
+                stop_after_failures=180,
+            )
+            logger.info(
+                f"Daily Chat-Clear (best effort): gelöscht={stats['deleted']} fehlgeschlagen={stats['failed']}"
+            )
+        except Exception as e:
+            logger.error(f"Fehler bei Daily Chat-Clear: {e}")
+    clear_old_messages()
 
 
 # ---------------------------------------------------------
@@ -134,9 +209,7 @@ def send_telegram_message(text: str):
             data = r.json()
 
             if "result" in data and "message_id" in data["result"]:
-                msg_ids = load_message_cache()
-                msg_ids.append(data["result"]["message_id"])
-                save_message_cache(msg_ids)
+                register_message_id(data["result"]["message_id"])
                 
             time.sleep(0.1)
 

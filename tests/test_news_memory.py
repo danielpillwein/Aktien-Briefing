@@ -1,13 +1,18 @@
 import unittest
 
-from utils.news_memory import (
-    build_title_fingerprint,
-    canonicalize_url,
-    cosine_similarity,
-    normalize_text,
-)
+NEWS_MEMORY_IMPORT_ERROR = None
+try:
+    from utils.news_memory import (
+        build_title_fingerprint,
+        canonicalize_url,
+        cosine_similarity,
+        normalize_text,
+    )
+except ModuleNotFoundError as exc:
+    NEWS_MEMORY_IMPORT_ERROR = exc
 
 
+@unittest.skipIf(NEWS_MEMORY_IMPORT_ERROR is not None, f"optional dependency missing: {NEWS_MEMORY_IMPORT_ERROR}")
 class TestNewsMemory(unittest.TestCase):
     def test_canonicalize_url_removes_tracking_params(self):
         url = "https://www.example.com/news?id=1&utm_source=abc&fbclid=xyz&ref=foo"

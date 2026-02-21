@@ -2,7 +2,7 @@ import argparse
 import time
 from pathlib import Path
 from core.briefing_agent import run_briefing_test
-from core.scheduler import start_scheduler
+from core.scheduler import start_scheduler_background, stop_scheduler_background
 from loguru import logger
 
 # Logging-Konfiguration: Logs in Datei speichern
@@ -38,8 +38,14 @@ def main():
         logger.info(f"⏱️ Testlauf abgeschlossen — Gesamtdauer: {duration:.2f} Sekunden")
 
     else:
-        logger.info("🕓 Starte Scheduler-Modus...")
-        start_scheduler()
+        logger.info("🕓 Starte Runtime-Modus (Scheduler + Telegram Commands)...")
+        from core.telegram_commands import run_command_listener_polling
+
+        start_scheduler_background()
+        try:
+            run_command_listener_polling()
+        finally:
+            stop_scheduler_background()
 
 
 if __name__ == "__main__":
