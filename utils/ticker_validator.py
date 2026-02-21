@@ -28,3 +28,24 @@ def validate_ticker_exists_yfinance(ticker: str) -> Tuple[bool, str]:
         return True, ""
     except Exception:
         return False, "Ticker-Validierung derzeit nicht möglich (yfinance nicht erreichbar)."
+
+
+def suggest_name_from_yfinance(ticker: str) -> str:
+    try:
+        y_ticker = yf.Ticker(ticker)
+        info = {}
+        try:
+            info = y_ticker.get_info() or {}
+        except Exception:
+            try:
+                info = y_ticker.info or {}
+            except Exception:
+                info = {}
+
+        for key in ("shortName", "longName", "displayName", "name"):
+            value = info.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    except Exception:
+        pass
+    return ticker
