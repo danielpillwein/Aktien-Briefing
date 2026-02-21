@@ -28,6 +28,7 @@ from utils.notifications import (
 from utils.settings_repository import add_stock, load_settings_file, remove_stock
 from utils.ticker_validator import (
     normalize_ticker,
+    search_ticker_candidates,
     suggest_name_from_yfinance,
     validate_ticker_exists_yfinance,
     validate_ticker_syntax,
@@ -52,7 +53,7 @@ def _parse_allowed_chat_id(chat_id_raw: str) -> int:
 ALLOWED_CHAT_ID = _parse_allowed_chat_id(TELEGRAM_CHAT_ID_RAW)
 _MANUAL_BRIEFING_LOCK = threading.Lock()
 _MANUAL_BRIEFING_RUNNING = False
-ADD_WAIT_TICKER, ADD_WAIT_NAME = range(2)
+ADD_WAIT_COMPANY, ADD_WAIT_SELECTION, ADD_WAIT_MANUAL_TICKER, ADD_WAIT_MANUAL_NAME = range(4)
 ADD_CONFIRM_KEYWORDS = {"ja", "ok", "okay", "bestätigen", "bestaetigen", "yes", "y"}
 
 
@@ -180,8 +181,10 @@ def _format_list(items: list, title: str, emoji: str, highlight_ticker: str = ""
         ticker_raw = str(item.get("ticker", ""))
         ticker = escape(ticker_raw)
         name = escape(str(item.get("name", "")))
-        marker = " 🆕" if highlight_ticker and ticker_raw.upper() == highlight_ticker.upper() else ""
-        lines.append(f"{idx}. {ticker} - {name}{marker}")
+        line = f"{idx}. {ticker} - {name}"
+        if highlight_ticker and ticker_raw.upper() == highlight_ticker.upper():
+            line = f"<i>🆕 {line}</i>"
+        lines.append(line)
     return "\n".join(lines)
 
 
@@ -192,7 +195,7 @@ def _help_text() -> str:
             "",
             "📈 <b>Portfolio hinzufügen</b>",
             "<code>/portfolio_add</code>",
-            "Startet den Dialog: zuerst Ticker, dann Name (Vorschlag aus yfinance).",
+            "Startet den Dialog: Unternehmen eingeben, Vorschlag auswählen oder manuell hinzufügen.",
             "",
             "📉 <b>Portfolio entfernen</b>",
             "<code>/portfolio_remove &lt;TICKER&gt;</code>",
@@ -200,7 +203,7 @@ def _help_text() -> str:
             "",
             "👀 <b>Watchlist hinzufügen</b>",
             "<code>/watchlist_add</code>",
-            "Startet den Dialog: zuerst Ticker, dann Name (Vorschlag aus yfinance).",
+            "Startet den Dialog: Unternehmen eingeben, Vorschlag auswählen oder manuell hinzufügen.",
             "",
             "🗑️ <b>Watchlist entfernen</b>",
             "<code>/watchlist_remove &lt;TICKER&gt;</code>",
@@ -312,7 +315,7 @@ async def portfolio_add_command(update: Update, context: ContextTypes.DEFAULT_TY
         await _reply_not_authorized(update)
         return ConversationHandler.END
     await _start_add_conversation(update, context, "portfolio")
-    return ADD_WAIT_TICKER
+    return ADD_WAIT_COMPANY
 
 
 async def watchlist_add_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -320,7 +323,7 @@ async def watchlist_add_command(update: Update, context: ContextTypes.DEFAULT_TY
         await _reply_not_authorized(update)
         return ConversationHandler.END
     await _start_add_conversation(update, context, "watchlist")
-    return ADD_WAIT_TICKER
+    return ADD_WAIT_COMPANY
 
 
 async def portfolio_remove_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -333,6 +336,8 @@ async def watchlist_remove_command(update: Update, context: ContextTypes.DEFAULT
 
 def _clear_add_context(context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop("add_target_list", None)
+    context.user_data.pop("add_company_query", None)
+    context.user_data.pop("add_candidates", None)
     context.user_data.pop("add_ticker", None)
     context.user_data.pop("add_name_suggestion", None)
 
@@ -350,79 +355,47 @@ async def _start_add_conversation(update: Update, context: ContextTypes.DEFAULT_
         "\n".join(
             [
                 f"🧩 <b>{target_label} hinzufügen</b>",
-                "Bitte sende jetzt den <b>Ticker</b> (z. B. <code>MSFT</code>).",
+                "Bitte sende den <b>Unternehmensnamen</b> (z. B. <code>Microsoft</code>).",
+                "Alternativ: sende <code>manuell</code> oder <code>ganz andere</code>, um direkt mit einem Ticker weiterzumachen.",
             ]
         ),
     )
 
 
-async def add_receive_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    if not _is_authorized(update):
-        await _reply_not_authorized(update)
-        return ConversationHandler.END
-    if not update.message or not update.message.text:
-        await _reply_and_track_html(update, _format_validation_error("Bitte sende einen Ticker als Text."))
-        return ADD_WAIT_TICKER
-
-    ticker = normalize_ticker(update.message.text.split()[0])
-
-    syntax_ok, syntax_error = validate_ticker_syntax(ticker)
-    if not syntax_ok:
-        await _reply_and_track_html(update, _format_validation_error(syntax_error))
-        await _reply_and_track_html(update, "Bitte sende einen gültigen Ticker.")
-        return ADD_WAIT_TICKER
-
-    exists_ok, exists_error = validate_ticker_exists_yfinance(ticker)
-    if not exists_ok:
-        await _reply_and_track_html(update, _format_validation_error(exists_error))
-        await _reply_and_track_html(update, "Bitte sende einen anderen Ticker.")
-        return ADD_WAIT_TICKER
-
-    suggested_name = suggest_name_from_yfinance(ticker)
-    context.user_data["add_ticker"] = ticker
-    context.user_data["add_name_suggestion"] = suggested_name
-
-    await _reply_and_track_html(
-        update,
-        "\n".join(
-            [
-                "✅ <b>Ticker geprüft</b>",
-                f"Ticker: <b>{escape(ticker)}</b>",
-                f"Vorschlag: <b>{escape(suggested_name)}</b>",
-                "Sende jetzt den gewünschten <b>Namen</b> oder antworte mit <code>ja</code>, um den Vorschlag zu übernehmen.",
-            ]
-        ),
-    )
-    return ADD_WAIT_NAME
+def _format_candidate_options(candidates: list) -> str:
+    lines = ["🔎 <b>Meintest du eine dieser Aktien?</b>"]
+    for idx, c in enumerate(candidates, start=1):
+        symbol = escape(str(c.get("symbol", "")))
+        name = escape(str(c.get("name", "")))
+        exchange = escape(str(c.get("exchange", "")))
+        suffix = f" ({exchange})" if exchange else ""
+        lines.append(f"{idx}. {symbol} - {name}{suffix}")
+    lines.append("")
+    lines.append("Antworte mit der <b>Nummer</b> (z. B. <code>1</code>)")
+    lines.append("oder mit <code>manuell</code> bzw. <code>ganz andere</code>, wenn es eine andere Aktie ist.")
+    return "\n".join(lines)
 
 
-async def add_receive_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    if not _is_authorized(update):
-        await _reply_not_authorized(update)
-        return ConversationHandler.END
-    if not update.message or not update.message.text:
-        await _reply_and_track_html(update, _format_validation_error("Bitte sende einen Namen als Text."))
-        return ADD_WAIT_NAME
+def _parse_selection(text: str, max_value: int) -> int:
+    value = (text or "").strip()
+    if not value.isdigit():
+        return -1
+    idx = int(value)
+    if idx < 1 or idx > max_value:
+        return -1
+    return idx
 
-    list_name = context.user_data.get("add_target_list", "")
-    ticker = context.user_data.get("add_ticker", "")
-    suggested_name = context.user_data.get("add_name_suggestion", ticker)
 
-    if not list_name or not ticker:
-        _clear_add_context(context)
-        await _reply_and_track_html(update, "❌ <b>Dialogstatus verloren</b>\nBitte starte erneut mit /portfolio_add oder /watchlist_add.")
-        return ConversationHandler.END
+def _wants_manual_flow(text: str) -> bool:
+    normalized = (text or "").strip().lower()
+    if not normalized:
+        return False
+    if normalized in {"manuell", "manual", "andere", "anders", "other", "0"}:
+        return True
+    return "manuell" in normalized or "ganz andere" in normalized
 
-    raw_name = update.message.text.strip()
-    if raw_name.lower() in ADD_CONFIRM_KEYWORDS:
-        name = suggested_name
-    else:
-        name = raw_name
 
-    if not name:
-        await _reply_and_track_html(update, _format_validation_error("Name darf nicht leer sein."))
-        return ADD_WAIT_NAME
-
+async def _finalize_add_and_show_list(update: Update, context: ContextTypes.DEFAULT_TYPE, list_name: str, ticker: str, name: str) -> int:
     try:
         result = add_stock(list_name=list_name, ticker=ticker, name=name)
         settings = load_settings_file()
@@ -444,8 +417,141 @@ async def add_receive_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await _reply_and_track_html(update, _format_storage_error())
     finally:
         _clear_add_context(context)
-
     return ConversationHandler.END
+
+
+async def add_receive_company(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not _is_authorized(update):
+        await _reply_not_authorized(update)
+        return ConversationHandler.END
+    if not update.message or not update.message.text:
+        await _reply_and_track_html(update, _format_validation_error("Bitte sende einen Unternehmensnamen als Text."))
+        return ADD_WAIT_COMPANY
+
+    text = update.message.text.strip()
+    if _wants_manual_flow(text):
+        await _reply_and_track_html(
+            update,
+            "✍️ <b>Manuelles Hinzufügen</b>\nBitte sende jetzt den <b>Ticker</b> (z. B. <code>MSFT</code>).",
+        )
+        return ADD_WAIT_MANUAL_TICKER
+
+    candidates = await asyncio.to_thread(search_ticker_candidates, text, 5)
+    if not candidates:
+        await _reply_and_track_html(
+            update,
+            "⚠️ <b>Keine passenden Aktien gefunden</b>\nSende einen anderen Unternehmensnamen oder antworte mit <code>manuell</code>.",
+        )
+        return ADD_WAIT_COMPANY
+
+    context.user_data["add_company_query"] = text
+    context.user_data["add_candidates"] = candidates
+    await _reply_and_track_html(update, _format_candidate_options(candidates))
+    return ADD_WAIT_SELECTION
+
+
+async def add_receive_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not _is_authorized(update):
+        await _reply_not_authorized(update)
+        return ConversationHandler.END
+    if not update.message or not update.message.text:
+        await _reply_and_track_html(update, _format_validation_error("Bitte sende eine Nummer oder 'manuell/ganz andere'."))
+        return ADD_WAIT_SELECTION
+
+    list_name = context.user_data.get("add_target_list", "")
+    candidates = context.user_data.get("add_candidates", [])
+    if not list_name or not isinstance(candidates, list) or not candidates:
+        _clear_add_context(context)
+        await _reply_and_track_html(update, "❌ <b>Dialogstatus verloren</b>\nBitte starte erneut mit /portfolio_add oder /watchlist_add.")
+        return ConversationHandler.END
+
+    text = update.message.text.strip()
+    if _wants_manual_flow(text):
+        await _reply_and_track_html(
+            update,
+            "✍️ <b>Manuelles Hinzufügen</b>\nBitte sende jetzt den <b>Ticker</b> (z. B. <code>MSFT</code>).",
+        )
+        return ADD_WAIT_MANUAL_TICKER
+
+    selected_idx = _parse_selection(text, len(candidates))
+    if selected_idx == -1:
+        await _reply_and_track_html(
+            update,
+            f"⚠️ <b>Ungültige Auswahl</b>\nBitte sende eine Nummer von <code>1</code> bis <code>{len(candidates)}</code> oder <code>manuell</code>/<code>ganz andere</code>.",
+        )
+        return ADD_WAIT_SELECTION
+
+    selected = candidates[selected_idx - 1]
+    ticker = normalize_ticker(str(selected.get("symbol", "")))
+    name = str(selected.get("name", "")).strip() or ticker
+    return await _finalize_add_and_show_list(update, context, list_name, ticker, name)
+
+
+async def add_receive_manual_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not _is_authorized(update):
+        await _reply_not_authorized(update)
+        return ConversationHandler.END
+    if not update.message or not update.message.text:
+        await _reply_and_track_html(update, _format_validation_error("Bitte sende einen Ticker als Text."))
+        return ADD_WAIT_MANUAL_TICKER
+
+    ticker = normalize_ticker(update.message.text.split()[0])
+    syntax_ok, syntax_error = validate_ticker_syntax(ticker)
+    if not syntax_ok:
+        await _reply_and_track_html(update, _format_validation_error(syntax_error))
+        return ADD_WAIT_MANUAL_TICKER
+
+    exists_ok, exists_error = validate_ticker_exists_yfinance(ticker)
+    if not exists_ok:
+        await _reply_and_track_html(update, _format_validation_error(exists_error))
+        return ADD_WAIT_MANUAL_TICKER
+
+    suggested_name = suggest_name_from_yfinance(ticker)
+    context.user_data["add_ticker"] = ticker
+    context.user_data["add_name_suggestion"] = suggested_name
+
+    await _reply_and_track_html(
+        update,
+        "\n".join(
+            [
+                "✅ <b>Ticker geprüft</b>",
+                f"Ticker: <b>{escape(ticker)}</b>",
+                f"Vorschlag: <b>{escape(suggested_name)}</b>",
+                "Sende jetzt den gewünschten <b>Namen</b> oder antworte mit <code>ja</code>, um den Vorschlag zu übernehmen.",
+            ]
+        ),
+    )
+    return ADD_WAIT_MANUAL_NAME
+
+
+async def add_receive_manual_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not _is_authorized(update):
+        await _reply_not_authorized(update)
+        return ConversationHandler.END
+    if not update.message or not update.message.text:
+        await _reply_and_track_html(update, _format_validation_error("Bitte sende einen Namen als Text."))
+        return ADD_WAIT_MANUAL_NAME
+
+    list_name = context.user_data.get("add_target_list", "")
+    ticker = context.user_data.get("add_ticker", "")
+    suggested_name = context.user_data.get("add_name_suggestion", ticker)
+
+    if not list_name or not ticker:
+        _clear_add_context(context)
+        await _reply_and_track_html(update, "❌ <b>Dialogstatus verloren</b>\nBitte starte erneut mit /portfolio_add oder /watchlist_add.")
+        return ConversationHandler.END
+
+    raw_name = update.message.text.strip()
+    if raw_name.lower() in ADD_CONFIRM_KEYWORDS:
+        name = suggested_name
+    else:
+        name = raw_name
+
+    if not name:
+        await _reply_and_track_html(update, _format_validation_error("Name darf nicht leer sein."))
+        return ADD_WAIT_MANUAL_NAME
+
+    return await _finalize_add_and_show_list(update, context, list_name, ticker, name)
 
 
 async def add_cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -604,8 +710,10 @@ def build_command_application() -> Application:
             CommandHandler("watchlist_add", watchlist_add_command),
         ],
         states={
-            ADD_WAIT_TICKER: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_ticker)],
-            ADD_WAIT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_name)],
+            ADD_WAIT_COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_company)],
+            ADD_WAIT_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_selection)],
+            ADD_WAIT_MANUAL_TICKER: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_manual_ticker)],
+            ADD_WAIT_MANUAL_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_receive_manual_name)],
         },
         fallbacks=[CommandHandler("cancel", add_cancel_command)],
         allow_reentry=True,
