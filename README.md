@@ -131,6 +131,7 @@ watchlist:
 scheduler:
   time: "07:00"
   timezone: "Europe/Vienna"
+  day_of_week: "tue-sat"
 ```
 
 ### 4. Install dependencies
@@ -176,7 +177,7 @@ The container will:
 |---------|-------------|
 | `portfolio` | Your main stock holdings (ticker + company name) |
 | `watchlist` | Stocks you're watching but don't own |
-| `scheduler` | When to run (`time` + `timezone`) |
+| `scheduler` | When to run (`time`, `timezone`, `day_of_week`) |
 | `performance` | Caching, retries, concurrency settings |
 | `archive` | Archiving behavior and retention |
 

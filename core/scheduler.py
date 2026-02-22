@@ -70,6 +70,7 @@ def _load_scheduler_config():
     sched_cfg = settings.get("scheduler", {})
     time_str = sched_cfg.get("time", "07:00")
     timezone = sched_cfg.get("timezone", "Europe/Vienna")
+    day_of_week = sched_cfg.get("day_of_week", "tue-sat")
     hour, minute = map(int, time_str.split(":"))
 
     prep_minute = minute - 5
@@ -87,6 +88,7 @@ def _load_scheduler_config():
         "prep_minute": prep_minute,
         "time_str": time_str,
         "timezone": timezone,
+        "day_of_week": day_of_week,
     }
 
 
@@ -106,6 +108,7 @@ def start_scheduler_background() -> BackgroundScheduler:
         "cron",
         hour=cfg["prep_hour"],
         minute=cfg["prep_minute"],
+        day_of_week=cfg["day_of_week"],
         id=PREPARE_JOB_ID,
         replace_existing=True,
     )
@@ -114,6 +117,7 @@ def start_scheduler_background() -> BackgroundScheduler:
         "cron",
         hour=cfg["hour"],
         minute=cfg["minute"],
+        day_of_week=cfg["day_of_week"],
         id=SEND_JOB_ID,
         replace_existing=True,
     )
@@ -125,6 +129,7 @@ def start_scheduler_background() -> BackgroundScheduler:
     logger.info("📅 Scheduler gestartet:")
     logger.info(f"   - Vorbereitung: {cfg['prep_hour']:02d}:{cfg['prep_minute']:02d} ({cfg['timezone']})")
     logger.info(f"   - Versand:      {cfg['time_str']} ({cfg['timezone']})")
+    logger.info(f"   - Wochentage:   {cfg['day_of_week']}")
     return scheduler
 
 
@@ -153,6 +158,7 @@ def get_scheduler_status() -> dict:
         "running": running,
         "timezone": _scheduler_meta.get("timezone"),
         "configured_send_time": _scheduler_meta.get("time_str"),
+        "configured_day_of_week": _scheduler_meta.get("day_of_week"),
         "next_prepare_run": next_prepare,
         "next_send_run": next_send,
     }

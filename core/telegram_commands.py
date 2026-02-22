@@ -981,6 +981,7 @@ async def scheduler_status_command(update: Update, context: ContextTypes.DEFAULT
     running_text = "🟢 Aktiv" if running else "🔴 Inaktiv"
     timezone = escape(str(status.get("timezone") or "unbekannt"))
     configured_send_time = escape(str(status.get("configured_send_time") or "unbekannt"))
+    configured_day_of_week = escape(str(status.get("configured_day_of_week") or "unbekannt"))
     next_prepare = _format_dt(status.get("next_prepare_run"))
     next_send = _format_dt(status.get("next_send_run"))
 
@@ -990,6 +991,7 @@ async def scheduler_status_command(update: Update, context: ContextTypes.DEFAULT
             f"{running_text}",
             f"🌍 Zeitzone: {timezone}",
             f"⏰ Geplante Versandzeit: {configured_send_time} Uhr",
+            f"📅 Geplante Wochentage: {configured_day_of_week}",
             f"🧠 Nächste Vorbereitung: {next_prepare}",
             f"📤 Nächster Versand: {next_send}",
         ]
