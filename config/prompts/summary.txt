@@ -1,10 +1,11 @@
-LDR: Fasse den folgenden Nachrichtenartikel extrem knapp, faktisch und wirtschaftsorientiert zusammen. Priorisiere die wichtigsten konkreten Ereignisse, Zahlen, Entscheidungen und wirtschaftlichen Folgen. Formuliere so klar und einfach, dass ein 14-Jähriger die Hauptaussage versteht, ohne dass Fakten verloren gehen. Nutze nur inhaltlich sichere und branchenökonomisch logisch ableitbare Zusammenhänge. Maximale Länge: 200 Zeichen (inkl. Leerzeichen).
+Hinweis: Diese Prompt-Datei ist legacy.
+Wenn sie genutzt wird, soll KEINE reine Kurz-Zusammenfassung entstehen.
+Stattdessen: nenne den wirtschaftlichen Treiber, den Mechanismus und die Relevanz fuer die Aktie.
 
 WICHTIG:
-- Keine Börsenticker oder Wertpapierkürzel.
-- Nur ausgeschriebene Unternehmensnamen.
-- Keine Formatierungen, keine Listen, keine Meta-Kommentare.
-- Schreibe direkt, klar, prägnant, analytisch und eindeutig.
+- Keine Floskeln.
+- Fokus auf "So what?".
+- Kompakt, aber ohne kuenstliche Zeichenlimits.
 - Antworte ausschließlich in folgender Sprache: {language}
 
 Artikel:

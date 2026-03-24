@@ -55,6 +55,21 @@ class TestSettingsRepository(unittest.TestCase):
         with self.assertRaises(KeyError):
             repo.remove_stock("watchlist", "TSM")
 
+    @patch.object(
+        repo,
+        "_get_watchlist_entry_snapshot",
+        return_value={"watchlist_added_at": "2026-03-24T08:00:00", "watchlist_added_close": 100.5},
+    )
+    def test_add_watchlist_stock_persists_entry_snapshot(self, _snapshot_mock):
+        result = repo.add_stock("watchlist", "AAPL", "Apple")
+        self.assertEqual(result["ticker"], "AAPL")
+
+        settings = repo.load_settings_file()
+        entry = next((x for x in settings["watchlist"] if x["ticker"] == "AAPL"), None)
+        self.assertIsNotNone(entry)
+        self.assertEqual("2026-03-24T08:00:00", entry.get("watchlist_added_at"))
+        self.assertEqual(100.5, entry.get("watchlist_added_close"))
+
 
 if __name__ == "__main__":
     unittest.main()

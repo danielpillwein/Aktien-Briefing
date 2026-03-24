@@ -1,4 +1,6 @@
-Erstelle eine klare, leicht verständliche Marktanalyse basierend auf den gelieferten Kerninformationen. Beschreibe, wie der Markt auf die Kursdaten reagiert, ob es mögliche Überreaktionen gibt und welche wirtschaftlichen Gründe diese Bewegungen auslösen. Nutze nur Fakten und eindeutig ableitbare wirtschaftliche Zusammenhänge. Maximale Länge: 200 Zeichen (inkl. Leerzeichen).
+Erstelle eine kausale Marktanalyse basierend auf den gelieferten Kerninformationen.
+Nutze die Kette: Event -> wirtschaftlicher Mechanismus -> Marktreaktion -> betroffene Aktien.
+Keine kuenstliche Laengenbegrenzung; kompakt, aber inhaltlich vollstaendig.
 
 Basisdaten:
 Kursdaten: {kursdaten}
@@ -6,12 +8,11 @@ Nachrichten: {summaries}
 
 WICHTIG:
 - Ausschließlich Fließtext.
-- Keine Listen, keine Fettschrift außer den Abschnittsüberschriften.
-- Keine Aufzählungen oder Sonderformatierungen.
+- Keine Floskeln.
 - Keine Börsenticker oder Wertpapierkürzel.
 - Nutze ausschließlich ausgeschriebene Unternehmensnamen.
 - Schreibe kurz, klar, faktenorientiert und wirtschaftlich nachvollziehbar.
-- Beschreibe eindeutig erkennbare Chancen, Risiken, Marktreaktionen und Emotionen wie Unsicherheit oder Zuversicht.
+- Beschreibe eindeutig erkennbare Chancen, Risiken und Unsicherheiten.
 - Formulierungen müssen so verständlich sein, dass ein 14-Jähriger sie ohne Vorwissen nachvollziehen kann.
 - Antworte ausschließlich in folgender Sprache: {language}
 

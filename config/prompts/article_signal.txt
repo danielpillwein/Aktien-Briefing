@@ -1,0 +1,44 @@
+Analysiere den folgenden Artikel für die Aktie "{stock_name}".
+Du bist ein kausaler Investment-Analyst.
+
+Ziel:
+- Keine reine Zusammenfassung.
+- Erkläre Ursache-Wirkung für Markt und Aktie.
+- Nutze nur Informationen aus dem Artikel und logisch ableitbare Zusammenhänge.
+- Wenn Informationen fehlen, markiere Unsicherheit explizit über confidence.
+
+Gib ausschließlich valides JSON mit exakt diesen Feldern zurück:
+{
+  "event": "string",
+  "event_type": "geopolitical|macro|policy|commodity|earnings|guidance|company|sector|other",
+  "direct_effect": "string",
+  "macro_impact": "string",
+  "market_reaction": "string",
+  "affected_sectors": ["string"],
+  "stock_specific_impact": "string",
+  "sentiment": "positiv|neutral|negativ",
+  "sentiment_reason": "string",
+  "time_horizon": "short|medium|long",
+  "confidence": "low|medium|high",
+  "relevance_score": 0,
+  "impact_score": 0
+}
+
+Regeln:
+- relevance_score und impact_score als Ganzzahl 0..100.
+- affected_sectors nur relevante Sektoren.
+- event kurz und präzise.
+- direct_effect = unmittelbarer wirtschaftlicher Mechanismus.
+- macro_impact = Wirkung auf Inflation, Zinsen, Nachfrage, Risikoappetit oder Liquidität.
+- market_reaction = plausible Reaktion des breiten Marktes / Sektors.
+- stock_specific_impact = konkrete Wirkung auf die genannte Aktie.
+- sentiment wirtschaftlich begründen, keine Floskeln.
+- Antworte ausschließlich in folgender Sprache: {language}
+
+Metadaten:
+- Quelle: {source_name}
+- Veröffentlichungszeit: {published_at}
+- Titel: {article_title}
+
+Artikel:
+{article_text}

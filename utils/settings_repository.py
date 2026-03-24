@@ -76,6 +76,27 @@ def _find_duplicate_list(settings: Dict[str, Any], ticker: str) -> str:
     return ""
 
 
+def _get_watchlist_entry_snapshot(ticker: str) -> Dict[str, Any]:
+    """
+    Liefert Metadaten für neue Watchlist-Einträge.
+    Der Einstiegskurs ist optional, damit der Add-Flow bei API-Problemen
+    weiterhin zuverlässig funktioniert.
+    """
+    snapshot = {"watchlist_added_at": datetime.utcnow().replace(microsecond=0).isoformat()}
+
+    try:
+        import yfinance as yf  # lokaler Import: kein Hard-Dependency für alle Pfade
+
+        data = yf.Ticker(ticker).history(period="10d", interval="1d").dropna(subset=["Close"])
+        if len(data) >= 1:
+            snapshot["watchlist_added_close"] = round(float(data["Close"].iloc[-1]), 6)
+    except Exception:
+        # Snapshot ist optional; Fehler darf Add-Flow nicht blockieren.
+        pass
+
+    return snapshot
+
+
 def add_stock(list_name: str, ticker: str, name: str) -> Dict[str, Any]:
     ticker = ticker.upper().strip()
     name = name.strip()
@@ -90,7 +111,11 @@ def add_stock(list_name: str, ticker: str, name: str) -> Dict[str, Any]:
         if duplicate_list:
             raise ValueError(f"Ticker {ticker} existiert bereits in {duplicate_list}.")
 
-        target_list.append({"ticker": ticker, "name": name})
+        entry = {"ticker": ticker, "name": name}
+        if list_name == "watchlist":
+            entry.update(_get_watchlist_entry_snapshot(ticker))
+
+        target_list.append(entry)
 
         backup_path = backup_settings()
         save_settings_atomic(settings)

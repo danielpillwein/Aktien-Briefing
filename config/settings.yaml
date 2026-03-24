@@ -15,6 +15,7 @@ portfolio:
 watchlist:
   - ticker: "V"
     name: "Visa Inc."
+    watchlist_added_at: "2026-01-01T00:00:00"
 
 scheduler:
   time: "07:00"
@@ -38,9 +39,18 @@ novelty:
   exact_title_dedupe: true
   include_known_news_reason_in_report: true
 
+ranking:
+  min_relevance_score: 35
+  max_candidates_per_stock: 8
+  top_news_per_stock: 3
+  weights:
+    recency: 0.35
+    entity: 0.25
+    source_quality: 0.20
+    information_density: 0.10
+    macro_signal: 0.10
+
 archive:
   enabled: true
   compress_old: true        # ältere Reports zippen
   delete_after_days: 31    # nach 6 Monaten löschen
-
-

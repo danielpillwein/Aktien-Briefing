@@ -26,6 +26,7 @@ from utils.notifications import (
     clear_chat_history_best_effort,
     register_message_id,
 )
+from utils.telegram_archive import archive_outgoing_message_from_telegram_obj
 from utils.settings_repository import add_stock, load_settings_file, remove_stock
 from utils.ticker_validator import (
     normalize_ticker,
@@ -96,6 +97,11 @@ async def _reply_and_track(update: Update, text: str) -> None:
     msg = await target.reply_text(text)
     if msg:
         register_message_id(msg.message_id)
+        archive_outgoing_message_from_telegram_obj(
+            message_obj=msg,
+            text=text,
+            source="telegram_commands.reply_text",
+        )
 
 
 async def _reply_and_track_html(update: Update, text: str, reply_markup=None) -> None:
@@ -105,6 +111,12 @@ async def _reply_and_track_html(update: Update, text: str, reply_markup=None) ->
     msg = await target.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
     if msg:
         register_message_id(msg.message_id)
+        archive_outgoing_message_from_telegram_obj(
+            message_obj=msg,
+            text=text,
+            parse_mode="HTML",
+            source="telegram_commands.reply_text_html",
+        )
 
 
 async def _reply_not_authorized(update: Update) -> None:
@@ -925,10 +937,20 @@ async def _run_manual_briefing_job(bot, chat_id: int):
         await asyncio.to_thread(run_briefing_test, True)
         msg = await bot.send_message(chat_id=chat_id, text="✅ Manuelles Briefing abgeschlossen.")
         register_message_id(msg.message_id)
+        archive_outgoing_message_from_telegram_obj(
+            message_obj=msg,
+            text="✅ Manuelles Briefing abgeschlossen.",
+            source="telegram_commands.manual_briefing_job",
+        )
     except Exception as exc:
         logger.exception(f"Fehler bei /briefing_now: {exc}")
         msg = await bot.send_message(chat_id=chat_id, text="❌ Fehler beim manuellen Briefing.")
         register_message_id(msg.message_id)
+        archive_outgoing_message_from_telegram_obj(
+            message_obj=msg,
+            text="❌ Fehler beim manuellen Briefing.",
+            source="telegram_commands.manual_briefing_job",
+        )
     finally:
         _set_manual_briefing_running(False)
 

@@ -8,6 +8,7 @@ from loguru import logger
 from dotenv import load_dotenv
 from pathlib import Path
 from html import escape
+from utils.telegram_archive import archive_outgoing_message
 
 load_dotenv()
 
@@ -141,7 +142,7 @@ def clear_chat_before_briefing():
 # HTML-Sanitizer: nur erlaubte Tags behalten
 # ---------------------------------------------------------
 def sanitize_html(text: str) -> str:
-    """Entfernt alle HTML-Tags außer <b>, </b>, <a href="...">, </a>."""
+    """Entfernt alle HTML-Tags außer <b>, </b>, <i>, </i>, <a href="...">, </a>."""
     allowed_tags = []
     
     def save_tag(match):
@@ -149,7 +150,7 @@ def sanitize_html(text: str) -> str:
         allowed_tags.append(match.group(0))
         return f"__TAG_{idx}__"
     
-    text = re.sub(r'<b>|</b>|<a\s+href="[^"]*">|</a>', save_tag, text, flags=re.IGNORECASE)
+    text = re.sub(r'<b>|</b>|<i>|</i>|<a\s+href="[^"]*">|</a>', save_tag, text, flags=re.IGNORECASE)
     text = re.sub(r'<[^>]+>', '', text)
     
     parts = re.split(r'(__TAG_\d+__)', text)
@@ -215,7 +216,15 @@ def send_telegram_message(text: str):
             data = r.json()
 
             if "result" in data and "message_id" in data["result"]:
-                register_message_id(data["result"]["message_id"])
+                message_id = data["result"]["message_id"]
+                register_message_id(message_id)
+                archive_outgoing_message(
+                    chat_id=str(TELEGRAM_CHAT_ID),
+                    message_id=int(message_id),
+                    text=chunk,
+                    parse_mode="HTML",
+                    source="notifications.send_telegram_message",
+                )
                 
             time.sleep(0.1)
 
